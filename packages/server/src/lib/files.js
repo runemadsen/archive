@@ -117,7 +117,7 @@ export function listFiles(db, { limit = 50, offset = 0 } = {}) {
   return { items, total, limit, offset };
 }
 
-/** Soft-delete an file. Idempotent. */
+/** Soft-delete a file. Idempotent. */
 export function softDeleteFile(db, id) {
   const info = db
     .prepare(
@@ -127,6 +127,18 @@ export function softDeleteFile(db, id) {
   if (info.changes === 0) {
     const exists = db.prepare('SELECT 1 FROM files WHERE id = ?').get(id);
     if (!exists) throw new HttpError(404, 'File not found');
+  }
+}
+
+/** Soft-delete many files in one transaction. Any missing id aborts the batch. */
+export function softDeleteFiles(db, ids) {
+  db.exec('BEGIN');
+  try {
+    for (const id of ids) softDeleteFile(db, id);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
   }
 }
 

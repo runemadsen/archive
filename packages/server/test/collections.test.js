@@ -10,6 +10,8 @@ import {
   getCollection,
   addFileToCollection,
   removeFileFromCollection,
+  addFilesToCollection,
+  removeFilesFromCollection,
   getFileCollectionIds,
 } from '../src/lib/collections.js';
 
@@ -97,5 +99,27 @@ test('membership add/remove is idempotent and queryable', () => {
   assert.deepEqual(getFileCollectionIds(db, x.id), [a.id]);
   removeFileFromCollection(db, x.id, a.id);
   assert.deepEqual(getFileCollectionIds(db, x.id), []);
+  db.close();
+});
+
+test('bulk membership: add/remove many files atomically', () => {
+  const db = openMemoryDatabase();
+  const userId = seedUser(db);
+  const a = createCollection(db, { name: 'A' });
+  const ids = ['1.txt', '2.txt', '3.txt'].map((n) => file(db, userId, n).id);
+
+  addFilesToCollection(db, a.id, ids);
+  addFilesToCollection(db, a.id, [ids[0]]); // idempotent, no dup
+  for (const id of ids) assert.deepEqual(getFileCollectionIds(db, id), [a.id]);
+
+  removeFilesFromCollection(db, a.id, [ids[0], ids[1]]);
+  assert.deepEqual(getFileCollectionIds(db, ids[0]), []);
+  assert.deepEqual(getFileCollectionIds(db, ids[2]), [a.id]);
+
+  // Unknown collection throws; a missing file aborts the whole batch (rollback).
+  assert.throws(() => addFilesToCollection(db, 9999, ids), /Collection not found/);
+  // ids[0] is currently NOT a member; batching it with a bad id must roll back its add.
+  assert.throws(() => addFilesToCollection(db, a.id, [ids[0], 9999]), /File not found/);
+  assert.deepEqual(getFileCollectionIds(db, ids[0]), [], 'no partial write from aborted batch');
   db.close();
 });

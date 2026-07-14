@@ -18,9 +18,9 @@ test('collections CRUD + membership over HTTP', async () => {
     const b = (await app.post('/api/collections', { name: 'B', parentId: a.id })).json.collection;
     assert.equal(b.parent_id, a.id);
 
-    // Upload an file and add it to B.
+    // Upload a file and add it to B via the bulk endpoint (single-id array).
     const file = (await app.upload('/api/files', { filename: 'x.txt', contentType: 'text/plain', body: 'x' })).json.file;
-    assert.equal((await app.post(`/api/files/${file.id}/collections`, { collectionId: b.id })).status, 200);
+    assert.equal((await app.post(`/api/collections/${b.id}/files`, { fileIds: [file.id] })).status, 200);
     assert.deepEqual((await app.get(`/api/files/${file.id}/collections`)).json.collectionIds, [b.id]);
 
     // List shows descendant-inclusive counts (A counts B's file).
@@ -32,9 +32,41 @@ test('collections CRUD + membership over HTTP', async () => {
     // Filtering by A's name (descendant-inclusive) finds the file in B.
     assert.equal((await app.get('/api/search?q=' + encodeURIComponent('collection=A'))).json.total, 1);
 
-    // Remove membership -> filter empty.
-    await app.del(`/api/files/${file.id}/collections/${b.id}`);
+    // Remove membership -> filter empty (bulk DELETE with a JSON body).
+    await app.del(`/api/collections/${b.id}/files`, { body: { fileIds: [file.id] } });
     assert.equal((await app.get('/api/search?q=' + encodeURIComponent('collection=A'))).json.total, 0);
+  } finally {
+    await app.close();
+  }
+});
+
+test('bulk membership: many files added/removed in one request', async () => {
+  const app = await startTestApp();
+  try {
+    await login(app);
+    const c = (await app.post('/api/collections', { name: 'Trips' })).json.collection;
+    const ids = [];
+    for (const name of ['a.txt', 'b.txt', 'c.txt']) {
+      ids.push((await app.upload('/api/files', { filename: name, contentType: 'text/plain', body: name })).json.file.id);
+    }
+
+    // Add all three at once.
+    const added = await app.post(`/api/collections/${c.id}/files`, { fileIds: ids });
+    assert.equal(added.status, 200);
+    assert.equal(added.json.count, 3);
+    for (const id of ids) {
+      assert.deepEqual((await app.get(`/api/files/${id}/collections`)).json.collectionIds, [c.id]);
+    }
+    assert.equal((await app.get('/api/collections')).json.collections.find((x) => x.id === c.id).fileCount, 3);
+
+    // Remove two at once; one remains.
+    assert.equal((await app.del(`/api/collections/${c.id}/files`, { body: { fileIds: [ids[0], ids[1]] } })).status, 200);
+    assert.equal((await app.get('/api/collections')).json.collections.find((x) => x.id === c.id).fileCount, 1);
+
+    // Empty / missing fileIds is a 400.
+    assert.equal((await app.post(`/api/collections/${c.id}/files`, { fileIds: [] })).status, 400);
+    // Unknown collection is a 404.
+    assert.equal((await app.post('/api/collections/9999/files', { fileIds: [ids[2]] })).status, 404);
   } finally {
     await app.close();
   }

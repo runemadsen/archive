@@ -314,15 +314,25 @@ const store = {
 // ---- components -----------------------------------------------------------
 
 // <gemme-files> — the grid. Re-renders on query changes (store) and data
-// changes (uploads / server-sent), reconciling by file id.
+// changes (uploads / server-sent), reconciling by file id. Also owns
+// "select mode": a toggle that turns cards into a multi-select for filing a
+// batch into a collection in one request.
 class GemmeFiles extends HTMLElement {
   connectedCallback() {
     this.grid = this.querySelector('#results') || this.appendChild(Object.assign(document.createElement('div'), { id: 'results', className: 'grid' }));
     this.seq = 0;
     this.debounce = null;
+    this.selecting = false;
+    this.selected = new Set(); // file id strings
+    this.buildToolbar();
+
     // The server already rendered the grid for the current URL state, so we
-    // only refetch on subsequent changes.
-    this.unsubscribe = store.subscribe(() => this.refresh());
+    // only refetch on subsequent changes. A query change is a new result set,
+    // so it clears the selection; a data-only change preserves it.
+    this.unsubscribe = store.subscribe(() => {
+      this.clearSelection();
+      this.refresh();
+    });
     this.onData = () => this.scheduleRefresh();
     document.addEventListener('gemme:changed', this.onData);
     document.addEventListener('gemme:server-change', this.onData);
@@ -351,12 +361,121 @@ class GemmeFiles extends HTMLElement {
       return;
     }
     reconcile(this.grid, data.items || []);
+    this.applySelection(); // re-mark surviving cards; drop ids that vanished
     // If the server clamped the page (e.g. filters shrank the result set),
     // adopt it without triggering another fetch.
     if (typeof data.page === 'number' && data.page !== store.page) store.adoptPage(data.page);
     document.dispatchEvent(
       new CustomEvent('gemme:results', { detail: { page: data.page, pages: data.pages, total: data.total } })
     );
+  }
+
+  // ---- select mode ----
+  buildToolbar() {
+    const bar = document.createElement('div');
+    bar.className = 'selecttoolbar';
+    bar.innerHTML = `
+      <button type="button" class="select-toggle">Select</button>
+      <div class="selectbar" hidden>
+        <span class="selcount">0 selected</span>
+        <label class="control">Add to <select class="selcollection"></select></label>
+        <button type="button" class="seladd" disabled>Add</button>
+        <button type="button" class="selclear">Clear</button>
+        <span class="selhint sub"></span>
+      </div>`;
+    this.insertBefore(bar, this.grid);
+    this.toggleBtn = bar.querySelector('.select-toggle');
+    this.bar = bar.querySelector('.selectbar');
+    this.count = bar.querySelector('.selcount');
+    this.collectionSelect = bar.querySelector('.selcollection');
+    this.addBtn = bar.querySelector('.seladd');
+    this.hint = bar.querySelector('.selhint');
+
+    this.toggleBtn.addEventListener('click', () => this.toggleSelecting());
+    this.addBtn.addEventListener('click', () => this.add());
+    bar.querySelector('.selclear').addEventListener('click', () => this.clearSelection());
+    this.collectionSelect.addEventListener('change', () => this.updateBar());
+    // Intercept card clicks while selecting so they toggle instead of navigate.
+    this.grid.addEventListener('click', (e) => this.onCardClick(e));
+  }
+
+  toggleSelecting() {
+    this.selecting = !this.selecting;
+    this.grid.classList.toggle('selecting', this.selecting);
+    this.bar.hidden = !this.selecting;
+    this.toggleBtn.textContent = this.selecting ? 'Done' : 'Select';
+    this.toggleBtn.classList.toggle('active', this.selecting);
+    if (this.selecting) this.loadCollections();
+    else this.clearSelection();
+    this.updateBar();
+  }
+
+  onCardClick(e) {
+    if (!this.selecting) return;
+    const card = e.target.closest('.card');
+    if (!card || !this.grid.contains(card)) return;
+    e.preventDefault(); // don't navigate to the detail page
+    const id = card.dataset.id;
+    if (this.selected.has(id)) this.selected.delete(id);
+    else this.selected.add(id);
+    card.classList.toggle('selected', this.selected.has(id));
+    this.hint.textContent = '';
+    this.updateBar();
+  }
+
+  clearSelection() {
+    this.selected.clear();
+    this.grid.querySelectorAll('.card.selected').forEach((c) => c.classList.remove('selected'));
+    this.updateBar();
+  }
+
+  // Re-apply the .selected class after a reconcile and forget ids that are no
+  // longer in the grid (e.g. filtered out or deleted).
+  applySelection() {
+    const present = new Set();
+    this.grid.querySelectorAll('.card').forEach((c) => {
+      present.add(c.dataset.id);
+      c.classList.toggle('selected', this.selected.has(c.dataset.id));
+    });
+    for (const id of [...this.selected]) if (!present.has(id)) this.selected.delete(id);
+    this.updateBar();
+  }
+
+  async loadCollections() {
+    const roots = buildTree(await fetchCollections());
+    this.collectionSelect.innerHTML = roots.length
+      ? collectionOptions(roots)
+      : `<option value="">No collections yet</option>`;
+    this.hint.textContent = roots.length ? '' : 'Create a collection first, on the Collections page.';
+    this.updateBar();
+  }
+
+  updateBar() {
+    if (!this.bar) return;
+    const n = this.selected.size;
+    this.count.textContent = `${n} selected`;
+    this.addBtn.disabled = n === 0 || !this.collectionSelect.value;
+  }
+
+  async add() {
+    const cid = Number(this.collectionSelect.value);
+    const fileIds = [...this.selected].map(Number);
+    if (!cid || !fileIds.length) return;
+    this.addBtn.disabled = true;
+    const res = await fetch(`/api/collections/${cid}/files`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ fileIds }),
+    });
+    if (res.ok) {
+      const label = this.collectionSelect.selectedOptions[0]?.textContent.trim() || 'collection';
+      this.hint.textContent = `Added ${fileIds.length} file${fileIds.length === 1 ? '' : 's'} to ${label}.`;
+      this.clearSelection();
+      document.dispatchEvent(new CustomEvent('gemme:changed')); // refresh sidebar counts + grid
+    } else {
+      this.hint.textContent = 'Could not add to collection.';
+      this.updateBar();
+    }
   }
 }
 
@@ -552,6 +671,19 @@ function buildTree(list) {
   return roots;
 }
 
+// Flatten a collection tree into <option>s, indented by depth (for a <select>).
+function collectionOptions(roots) {
+  const out = [];
+  const walk = (nodes, depth) => {
+    for (const n of nodes) {
+      out.push(`<option value="${n.id}">${'  '.repeat(depth)}${esc(n.name)}</option>`);
+      walk(n.children, depth + 1);
+    }
+  };
+  walk(roots, 0);
+  return out.join('');
+}
+
 async function fetchCollections() {
   const res = await fetch('/api/collections');
   return res.ok ? (await res.json()).collections : [];
@@ -642,13 +774,11 @@ class GemmeFileCollections extends HTMLElement {
   }
   async toggle(cb) {
     const id = Number(cb.dataset.id);
-    const res = cb.checked
-      ? await fetch(`/api/files/${this.fileId}/collections`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ collectionId: id }),
-        })
-      : await fetch(`/api/files/${this.fileId}/collections/${id}`, { method: 'DELETE' });
+    const res = await fetch(`/api/collections/${id}/files`, {
+      method: cb.checked ? 'POST' : 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ fileIds: [this.fileId] }),
+    });
     if (res.ok) {
       if (cb.checked) this.member.add(id);
       else this.member.delete(id);
@@ -826,7 +956,7 @@ class GemmeUploader extends HTMLElement {
             this.batch.push(id);
             this.syncAssign();
             // If a collection was already ticked mid-upload, file this one too.
-            for (const cid of this.selected) this.postMembership(id, cid);
+            for (const cid of this.selected) this.setMembership(cid, [id], true);
           }
         } catch (err) {
           if (this.round !== round) return;
@@ -840,18 +970,16 @@ class GemmeUploader extends HTMLElement {
     this.syncAssign();
   }
 
-  // Ticking a collection files (or unfiles) every file in the current batch.
+  // Ticking a collection files (or unfiles) the whole current batch in one request.
   async toggleCollection(cb) {
     const cid = Number(cb.dataset.id);
     const on = cb.checked;
     if (on) this.selected.add(cid);
     else this.selected.delete(cid);
-    const ids = [...this.batch];
-    const results = await Promise.all(
-      ids.map((fileId) => (on ? this.postMembership(fileId, cid) : this.deleteMembership(fileId, cid)))
-    );
-    if (results.some((ok) => !ok)) {
-      cb.checked = !on; // revert on any failure
+    const fileIds = [...this.batch];
+    const ok = fileIds.length === 0 || (await this.setMembership(cid, fileIds, on));
+    if (!ok) {
+      cb.checked = !on; // revert on failure
       if (on) this.selected.delete(cid);
       else this.selected.add(cid);
     } else {
@@ -859,17 +987,13 @@ class GemmeUploader extends HTMLElement {
     }
   }
 
-  async postMembership(fileId, collectionId) {
-    const res = await fetch(`/api/files/${fileId}/collections`, {
-      method: 'POST',
+  // Add or remove many files to/from one collection via the bulk endpoint.
+  async setMembership(collectionId, fileIds, add) {
+    const res = await fetch(`/api/collections/${collectionId}/files`, {
+      method: add ? 'POST' : 'DELETE',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ collectionId }),
+      body: JSON.stringify({ fileIds }),
     });
-    return res.ok;
-  }
-
-  async deleteMembership(fileId, collectionId) {
-    const res = await fetch(`/api/files/${fileId}/collections/${collectionId}`, { method: 'DELETE' });
     return res.ok;
   }
 }

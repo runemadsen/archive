@@ -5,8 +5,8 @@ import {
   createCollection,
   updateCollection,
   deleteCollection,
-  addFileToCollection,
-  removeFileFromCollection,
+  addFilesToCollection,
+  removeFilesFromCollection,
   getFileCollectionIds,
 } from '../../lib/collections.js';
 
@@ -14,6 +14,13 @@ function intParam(value, what) {
   const n = Number(value);
   if (!Number.isInteger(n) || n <= 0) throw new HttpError(400, `Invalid ${what}`);
   return n;
+}
+
+/** Validate a `{ fileIds }` body → array of positive ints (at least one). */
+function fileIdList(body) {
+  const ids = body?.fileIds;
+  if (!Array.isArray(ids) || ids.length === 0) throw new HttpError(400, 'fileIds must be a non-empty array');
+  return ids.map((id) => intParam(id, 'file id'));
 }
 
 export function registerCollectionRoutes(router) {
@@ -57,6 +64,7 @@ export function registerCollectionRoutes(router) {
   );
 
   // --- membership ---
+  // Read a single file's memberships (drives the detail-page checkboxes).
   router.get(
     '/api/files/:id/collections',
     requireAuth((req, res, ctx) => {
@@ -65,25 +73,27 @@ export function registerCollectionRoutes(router) {
     })
   );
 
+  // Bulk add/remove: one collection (path) × many files (body). Works with a
+  // single id via a one-element array.
   router.post(
-    '/api/files/:id/collections',
+    '/api/collections/:id/files',
     requireAuth(async (req, res, ctx) => {
-      const fileId = intParam(ctx.params.id, 'file id');
-      const { collectionId } = await readJson(req);
-      addFileToCollection(ctx.db, fileId, intParam(collectionId, 'collection id'));
+      const collectionId = intParam(ctx.params.id, 'collection id');
+      const fileIds = fileIdList(await readJson(req));
+      addFilesToCollection(ctx.db, collectionId, fileIds);
       ctx.events?.emit('change', { type: 'membership' });
-      sendJson(res, 200, { ok: true });
+      sendJson(res, 200, { ok: true, count: fileIds.length });
     })
   );
 
   router.delete(
-    '/api/files/:id/collections/:cid',
-    requireAuth((req, res, ctx) => {
-      const fileId = intParam(ctx.params.id, 'file id');
-      const cid = intParam(ctx.params.cid, 'collection id');
-      removeFileFromCollection(ctx.db, fileId, cid);
+    '/api/collections/:id/files',
+    requireAuth(async (req, res, ctx) => {
+      const collectionId = intParam(ctx.params.id, 'collection id');
+      const fileIds = fileIdList(await readJson(req));
+      removeFilesFromCollection(ctx.db, collectionId, fileIds);
       ctx.events?.emit('change', { type: 'membership' });
-      sendJson(res, 200, { ok: true });
+      sendJson(res, 200, { ok: true, count: fileIds.length });
     })
   );
 }

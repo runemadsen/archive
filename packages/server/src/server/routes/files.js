@@ -1,4 +1,4 @@
-import { sendJson, HttpError } from '../respond.js';
+import { sendJson, readJson, HttpError } from '../respond.js';
 import { requireAuth } from '../middleware.js';
 import { receiveUpload } from '../upload.js';
 import {
@@ -6,7 +6,7 @@ import {
   addVersion,
   getFile,
   listFiles,
-  softDeleteFile,
+  softDeleteFiles,
   deleteVersion,
   findDuplicateFile,
 } from '../../lib/files.js';
@@ -15,6 +15,13 @@ function intParam(value, what) {
   const n = Number(value);
   if (!Number.isInteger(n) || n <= 0) throw new HttpError(400, `Invalid ${what}`);
   return n;
+}
+
+/** Validate a `{ fileIds }` body → array of positive ints (at least one). */
+function fileIdList(body) {
+  const ids = body?.fileIds;
+  if (!Array.isArray(ids) || ids.length === 0) throw new HttpError(400, 'fileIds must be a non-empty array');
+  return ids.map((id) => intParam(id, 'file id'));
 }
 
 export function registerFileRoutes(router) {
@@ -92,13 +99,14 @@ export function registerFileRoutes(router) {
     })
   );
 
+  // Bulk soft-delete. Works with a single id via a one-element array.
   router.delete(
-    '/api/files/:id',
-    requireAuth((req, res, ctx) => {
-      const id = intParam(ctx.params.id, 'file id');
-      softDeleteFile(ctx.db, id);
-      ctx.events?.emit('change', { type: 'deleted', fileId: id });
-      sendJson(res, 200, { ok: true });
+    '/api/files',
+    requireAuth(async (req, res, ctx) => {
+      const fileIds = fileIdList(await readJson(req));
+      softDeleteFiles(ctx.db, fileIds);
+      ctx.events?.emit('change', { type: 'deleted' });
+      sendJson(res, 200, { ok: true, count: fileIds.length });
     })
   );
 

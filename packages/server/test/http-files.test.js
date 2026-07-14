@@ -91,14 +91,36 @@ test('same content under different names dedups the blob but makes distinct file
   }
 });
 
-test('soft-deleted file is gone from list and get', async () => {
+test('soft-deleted file is gone from list and get (single-id array)', async () => {
   const app = await startTestApp();
   try {
     await login(app);
     const a = (await app.upload('/api/files', { filename: 'z.txt', body: 'z' })).json.file;
-    assert.equal((await app.del(`/api/files/${a.id}`)).status, 200);
+    assert.equal((await app.del('/api/files', { body: { fileIds: [a.id] } })).status, 200);
     assert.equal((await app.get(`/api/files/${a.id}`)).status, 404);
     assert.equal((await app.get('/api/files')).json.total, 0);
+  } finally {
+    await app.close();
+  }
+});
+
+test('bulk delete: many files in one request', async () => {
+  const app = await startTestApp();
+  try {
+    await login(app);
+    const ids = [];
+    for (const name of ['a.txt', 'b.txt', 'c.txt']) {
+      ids.push((await app.upload('/api/files', { filename: name, body: name })).json.file.id);
+    }
+    assert.equal((await app.get('/api/files')).json.total, 3);
+
+    const del = await app.del('/api/files', { body: { fileIds: [ids[0], ids[1]] } });
+    assert.equal(del.status, 200);
+    assert.equal(del.json.count, 2);
+    assert.equal((await app.get('/api/files')).json.total, 1);
+
+    // Empty / missing fileIds is a 400.
+    assert.equal((await app.del('/api/files', { body: { fileIds: [] } })).status, 400);
   } finally {
     await app.close();
   }

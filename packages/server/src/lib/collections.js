@@ -136,6 +136,35 @@ export function removeFileFromCollection(db, fileId, collectionId) {
   db.prepare('DELETE FROM file_collections WHERE file_id = ? AND collection_id = ?').run(fileId, collectionId);
 }
 
+/**
+ * Add many files to one collection in a single transaction. Validates the
+ * collection once; a missing file id aborts the whole batch. Duplicates are
+ * ignored (idempotent), so re-adding an already-member file is a no-op.
+ */
+export function addFilesToCollection(db, collectionId, fileIds) {
+  if (!getCollection(db, collectionId)) throw new HttpError(404, 'Collection not found');
+  db.exec('BEGIN');
+  try {
+    for (const fileId of fileIds) addFileToCollection(db, fileId, collectionId);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+/** Remove many files from one collection in a single transaction. */
+export function removeFilesFromCollection(db, collectionId, fileIds) {
+  db.exec('BEGIN');
+  try {
+    for (const fileId of fileIds) removeFileFromCollection(db, fileId, collectionId);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
 /** Collection ids an file belongs to (direct membership). */
 export function getFileCollectionIds(db, fileId) {
   return db

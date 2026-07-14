@@ -147,6 +147,21 @@ gemme-search { display: block; margin: 4px 0 16px; }
 .empty { padding: 20px 0; }
 .error { color: var(--accent); font-weight: 700; padding: 12px 0; }
 
+/* --- grid multi-select --- */
+.selecttoolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin: 4px 0; }
+.select-toggle.active { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.selectbar { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.selectbar[hidden] { display: none; }
+.selcount { text-transform: uppercase; letter-spacing: var(--track); font-variant-numeric: tabular-nums; }
+.selhint { color: var(--accent); }
+/* In select mode a corner check appears on every card; the card no longer navigates. */
+.grid.selecting .card { position: relative; }
+.grid.selecting .card::after { content: ''; position: absolute; top: 6px; right: 6px; width: 18px; height: 18px;
+  border: 1px solid var(--line); background: var(--paper); display: grid; place-items: center;
+  font-size: 12px; line-height: 1; color: var(--paper); }
+.grid.selecting .card.selected { border-color: var(--accent); }
+.grid.selecting .card.selected::after { content: '✓'; background: var(--accent); border-color: var(--accent); }
+
 /* --- pager (numbered, 1px cells) --- */
 .pager { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; margin: 22px auto 0;
   width: fit-content; border: 1px solid var(--line); }

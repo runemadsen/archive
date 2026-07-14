@@ -22,6 +22,8 @@ export {
   deleteCollection,
   addFileToCollection,
   removeFileFromCollection,
+  addFilesToCollection,
+  removeFilesFromCollection,
   getFileCollectionIds,
 } from './lib/collections.js';
 export { parseQuery, compileQuery, parseValue, tokenize, QueryError } from './lib/search/dsl.js';

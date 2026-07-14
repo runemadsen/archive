@@ -277,20 +277,42 @@ packages/
   `collection` filter key (a `FILTER_KEY`, not an EAV facet) compiles to a
   closure+name `EXISTS` — so duplicate names union their subtrees, and selecting a
   name is descendant-inclusive. It rides the same query/URL/search-bar system
-  (`collection=Trips,Docs`, `?collection=…`). CRUD + membership API
-  (`/api/collections`, `/api/files/:id/collections`); the sidebar
-  `<gemme-collections>` tree (multi-select by name → `store.filters.collection`),
-  a `/collections` manager page, and membership checkboxes (by id) on the file
-  detail page. Delete cascades the subtree (files untouched). Files:
-  `collections/collections.js`, `server/routes/collections.js`, migration 004.
-  Deferred: collection-based sharing.
+  (`collection=Trips,Docs`, `?collection=…`). CRUD API (`/api/collections`); the
+  sidebar `<gemme-collections>` tree (multi-select by name →
+  `store.filters.collection`), a `/collections` manager page, and membership
+  checkboxes (by id) on the file detail page. Delete cascades the subtree (files
+  untouched). Files: `collections/collections.js`,
+  `server/routes/collections.js`, migration 004. Deferred: collection-based sharing.
+- **Membership API is bulk (one collection × many files).**
+  `POST` / `DELETE /api/collections/:id/files` with `{ fileIds }` add/remove a
+  **set** of files to/from one collection in a single transaction, and work for
+  one file via a one-element array — there is no per-file membership write
+  endpoint. `GET /api/files/:id/collections` (single-file read) still backs the
+  detail-page checkboxes. Data layer: `addFilesToCollection` /
+  `removeFilesFromCollection` wrap the singular `addFileToCollection` /
+  `removeFileFromCollection` in a transaction (singular kept for internal reuse).
+  File **delete** is likewise bulk: `DELETE /api/files` with `{ fileIds }`
+  (`softDeleteFiles`) — no `DELETE /api/files/:id`. All three validate a
+  non-empty positive-int `fileIds` array (400 otherwise) and emit one `change`.
+- **Add to collections from the Files grid (done):** `<gemme-files>` owns a
+  **select mode** — a "Select" toggle turns cards into a multi-select (clicking a
+  card toggles a corner check instead of navigating; `.selected` class on the
+  `<a>`, so it survives keyed `reconcile`). The select bar picks one collection
+  and **Add**s the whole selection via `POST /api/collections/:id/files`, then
+  fires `gemme:changed` (sidebar counts + grid refresh). Selection is **cleared
+  on query changes** (new result set) but **preserved across data refreshes**
+  (extraction/SSE) — the two `refresh()` triggers are split for this;
+  `applySelection()` re-marks surviving cards and forgets vanished ids.
+  Add-only on the grid (removal stays on the detail page). Frontend-only beyond
+  the shared bulk endpoint; `<gemme-files>` in `web/public/app.js`, styles under
+  `/* --- grid multi-select --- */`.
 - **Assign uploads to collections (done):** the upload page's `<gemme-uploader>`
   now renders a collection tree beneath the file list. After a drop, the just-
   uploaded files form a **batch** (their ids, including skipped duplicates so a
   re-dropped file can still be filed); ticking a collection files (or unfiles)
-  every file in the batch via the existing `POST/DELETE
-  /api/files/:id/collections` membership API (one request per file, by id, like
-  the detail page). Each new drop starts a **fresh round** (a bumped `round`
+  the whole batch in **one** request via the bulk membership API
+  (`POST/DELETE /api/collections/:id/files` with `{ fileIds }`, `setMembership`).
+  Each new drop starts a **fresh round** (a bumped `round`
   counter; stale in-flight uploads bail on mismatch) that resets the file list,
   the batch, and the collection selection — so uploading over many rounds always
   assigns to just the most recent batch. The tree is hidden until ≥1 file lands.

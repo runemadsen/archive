@@ -18,4 +18,3 @@ etc. Here's what's needed:
 - What do I do with image formats (such as all the RAW formats) that aren't
   getting thumbnails right now? Should it just be included in the image plugin,
   or how can I approach it?
-- Multiple-select on files to add to a collection
