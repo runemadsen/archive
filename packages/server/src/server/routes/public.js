@@ -1,7 +1,7 @@
-import { HttpError } from '../respond.js';
-import { getFile } from '../../lib/files.js';
-import { isFilePublic } from '../../lib/collections.js';
-import { streamBytes, imageCacheControl } from '../render-response.js';
+import { isFilePublic } from "../../lib/collections.js";
+import { getFile } from "../../lib/files.js";
+import { streamBytes, imageCacheControl } from "../render-response.js";
+import { HttpError } from "../respond.js";
 
 /**
  * Unauthenticated public serving for files in a public collection (or a
@@ -17,12 +17,13 @@ import { streamBytes, imageCacheControl } from '../render-response.js';
  * visibility-revocation tradeoff.
  */
 export function registerPublicRoutes(router) {
-  router.get('/i/:id', (req, res, ctx) => {
+  router.get("/i/:id", (req, res, ctx) => {
     const file = resolvePublic(ctx);
-    if (!ctx.blobStore.has(file.content_hash)) throw new HttpError(404, 'Not found');
+    if (!ctx.blobStore.has(file.content_hash))
+      throw new HttpError(404, "Not found");
     streamBytes(req, res, {
       size: file.byte_size,
-      contentType: file.mime_type || 'application/octet-stream',
+      contentType: file.mime_type || "application/octet-stream",
       etag: `"${file.content_hash}"`,
       cacheControl: imageCacheControl(ctx),
       open: (range) => ctx.blobStore.createReadStream(file.content_hash, range),
@@ -37,6 +38,6 @@ export function registerPublicRoutes(router) {
 export function resolvePublic(ctx) {
   const id = Number(ctx.params.id);
   const file = Number.isInteger(id) && id > 0 ? getFile(ctx.db, id) : null;
-  if (!file || !isFilePublic(ctx.db, id)) throw new HttpError(404, 'Not found');
+  if (!file || !isFilePublic(ctx.db, id)) throw new HttpError(404, "Not found");
   return file;
 }

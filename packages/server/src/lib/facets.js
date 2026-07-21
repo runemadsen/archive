@@ -18,7 +18,7 @@ export function getFacet(db, key, { limit = 500 } = {}) {
         WHERE a.deleted_at IS NULL
         GROUP BY m.value_text
         ORDER BY count DESC, value ASC
-        LIMIT ?`
+        LIMIT ?`,
     )
     .all(key, limit);
 }

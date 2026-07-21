@@ -18,8 +18,22 @@
 
 const FIELD_RE = /^([A-Za-z_][\w.]*)(>=|<=|!=|[:=<>])([\s\S]*)$/;
 
-const TIME_UNITS = { ms: 0.001, s: 1, sec: 1, min: 60, h: 3600, hr: 3600, d: 86400 };
-const BYTE_UNITS = { b: 1, kb: 1024, mb: 1024 ** 2, gb: 1024 ** 3, tb: 1024 ** 4 };
+const TIME_UNITS = {
+  ms: 0.001,
+  s: 1,
+  sec: 1,
+  min: 60,
+  h: 3600,
+  hr: 3600,
+  d: 86400,
+};
+const BYTE_UNITS = {
+  b: 1,
+  kb: 1024,
+  mb: 1024 ** 2,
+  gb: 1024 ** 3,
+  tb: 1024 ** 4,
+};
 
 export class QueryError extends Error {}
 
@@ -31,7 +45,7 @@ export function tokenize(input) {
   while (i < n) {
     while (i < n && /\s/.test(input[i])) i++;
     if (i >= n) break;
-    let tok = '';
+    let tok = "";
     while (i < n && !/\s/.test(input[i])) {
       if (input[i] === '"') {
         tok += '"';
@@ -51,9 +65,9 @@ export function tokenize(input) {
 export function parseQuery(input) {
   const clauses = [];
   const text = [];
-  for (let raw of tokenize(input || '')) {
+  for (let raw of tokenize(input || "")) {
     let negate = false;
-    if (raw.length > 1 && raw[0] === '-') {
+    if (raw.length > 1 && raw[0] === "-") {
       negate = true;
       raw = raw.slice(1);
     }
@@ -75,18 +89,19 @@ export function parseQuery(input) {
 export function parseValue(raw) {
   if (/^\d{4}-\d{2}-\d{2}([T ].*)?$/.test(raw)) {
     const ms = Date.parse(raw);
-    if (Number.isFinite(ms)) return { kind: 'date', num: ms, text: raw };
+    if (Number.isFinite(ms)) return { kind: "date", num: ms, text: raw };
   }
   const num = /^(-?\d+(?:\.\d+)?)([A-Za-z]+)?$/.exec(raw);
   if (num) {
     const base = Number(num[1]);
     const unit = num[2]?.toLowerCase();
-    if (!unit) return { kind: 'number', num: base, text: raw };
+    if (!unit) return { kind: "number", num: base, text: raw };
     const factor = TIME_UNITS[unit] ?? BYTE_UNITS[unit];
-    if (factor !== undefined) return { kind: 'number', num: base * factor, text: raw };
+    if (factor !== undefined)
+      return { kind: "number", num: base * factor, text: raw };
     // unknown unit -> treat as text
   }
-  return { kind: 'text', text: raw };
+  return { kind: "text", text: raw };
 }
 
 /**
@@ -117,7 +132,8 @@ export function compileQuery(parsed) {
 }
 
 function compileTextTerm({ term, negate }) {
-  const fts = 'a.id IN (SELECT file_id FROM metadata_fts WHERE metadata_fts MATCH ?)';
+  const fts =
+    "a.id IN (SELECT file_id FROM metadata_fts WHERE metadata_fts MATCH ?)";
   const filenameSubstr =
     "EXISTS (SELECT 1 FROM file_metadata m WHERE m.file_id = a.id AND m.key = 'filename' AND m.value_text LIKE ? ESCAPE '\\')";
   const combined = `(${fts} OR ${filenameSubstr})`;
@@ -129,9 +145,9 @@ function compileClause({ key, op, values, negate }) {
   // `collection` is not EAV metadata — it matches files in any collection with
   // one of the given NAMES, or in any descendant of such a collection (via the
   // closure table). Duplicate names naturally union.
-  if (key === 'collection') {
+  if (key === "collection") {
     const names = values.map((v) => v.text);
-    const placeholders = names.map(() => '?').join(', ');
+    const placeholders = names.map(() => "?").join(", ");
     const exists = `EXISTS (SELECT 1 FROM file_collections ac
         JOIN collection_closure cc ON cc.descendant = ac.collection_id
         JOIN collections anc ON anc.id = cc.ancestor
@@ -147,26 +163,32 @@ function compileClause({ key, op, values, negate }) {
     params.push(...p);
   }
   // OR the per-value conditions: the field matches if ANY selected value matches.
-  const cond = frags.length > 1 ? `(${frags.join(' OR ')})` : frags[0];
+  const cond = frags.length > 1 ? `(${frags.join(" OR ")})` : frags[0];
 
   const exists = `EXISTS (SELECT 1 FROM file_metadata m WHERE m.file_id = a.id AND m.key = ? AND ${cond})`;
   // `!=` negates the match; a leading `-` negates the whole term; they compose.
-  const finalNegate = (op === '!=') !== negate;
+  const finalNegate = (op === "!=") !== negate;
   return { sql: finalNegate ? `NOT ${exists}` : exists, params };
 }
 
 /** SQL fragment + params for matching one value under an operator. */
 function valueCondition(op, value) {
-  const numeric = value.kind === 'number' || value.kind === 'date';
-  if (op === '>' || op === '<' || op === '>=' || op === '<=') {
-    if (!numeric) throw new QueryError(`Operator '${op}' needs a numeric or date value (got '${value.text}')`);
+  const numeric = value.kind === "number" || value.kind === "date";
+  if (op === ">" || op === "<" || op === ">=" || op === "<=") {
+    if (!numeric)
+      throw new QueryError(
+        `Operator '${op}' needs a numeric or date value (got '${value.text}')`,
+      );
     return { frag: `m.value_num ${op} ?`, params: [value.num] };
   }
-  if (op === ':' && !numeric) {
-    return { frag: "m.value_text LIKE ? ESCAPE '\\'", params: [`%${escapeLike(value.text)}%`] };
+  if (op === ":" && !numeric) {
+    return {
+      frag: "m.value_text LIKE ? ESCAPE '\\'",
+      params: [`%${escapeLike(value.text)}%`],
+    };
   }
-  if (numeric) return { frag: 'm.value_num = ?', params: [value.num] };
-  return { frag: 'm.value_text = ?', params: [value.text] };
+  if (numeric) return { frag: "m.value_num = ?", params: [value.num] };
+  return { frag: "m.value_text = ?", params: [value.text] };
 }
 
 /**
@@ -175,21 +197,26 @@ function valueCondition(op, value) {
  * literal (commas included).
  */
 function splitValues(raw) {
-  if (raw.length >= 2 && raw[0] === '"' && raw.endsWith('"')) return [parseValue(stripQuotes(raw))];
-  return raw.split(',').map((part) => {
+  if (raw.length >= 2 && raw[0] === '"' && raw.endsWith('"'))
+    return [parseValue(stripQuotes(raw))];
+  return raw.split(",").map((part) => {
     const p = part.trim();
-    return parseValue(p.length >= 2 && p[0] === '"' && p.endsWith('"') ? stripQuotes(p) : p);
+    return parseValue(
+      p.length >= 2 && p[0] === '"' && p.endsWith('"') ? stripQuotes(p) : p,
+    );
   });
 }
 
 function ftsPhrase(term) {
-  return `"${term.replace(/"/g, '')}"`;
+  return `"${term.replace(/"/g, "")}"`;
 }
 
 function stripQuotes(s) {
-  return s.length >= 2 && s[0] === '"' && s[s.length - 1] === '"' ? s.slice(1, -1) : s;
+  return s.length >= 2 && s[0] === '"' && s[s.length - 1] === '"'
+    ? s.slice(1, -1)
+    : s;
 }
 
 function escapeLike(s) {
-  return s.replace(/[%_\\]/g, '\\$&');
+  return s.replace(/[%_\\]/g, "\\$&");
 }

@@ -1,7 +1,8 @@
-import { DatabaseSync } from 'node:sqlite';
-import fs from 'node:fs';
-import path from 'node:path';
-import { migrate } from './migrate.js';
+import fs from "node:fs";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
+
+import { migrate } from "./migrate.js";
 
 /**
  * The single point of access to SQLite. All other modules go through the
@@ -15,7 +16,7 @@ import { migrate } from './migrate.js';
  */
 export function openDatabase({ dataDir, migrate: runMigrations = true }) {
   fs.mkdirSync(dataDir, { recursive: true });
-  const dbPath = path.join(dataDir, 'gemme.db');
+  const dbPath = path.join(dataDir, "gemme.db");
   const db = new DatabaseSync(dbPath);
   applyPragmas(db);
   if (runMigrations) migrate(db);
@@ -27,14 +28,14 @@ export function openDatabase({ dataDir, migrate: runMigrations = true }) {
  * @returns {import('node:sqlite').DatabaseSync}
  */
 export function openMemoryDatabase({ migrate: runMigrations = true } = {}) {
-  const db = new DatabaseSync(':memory:');
+  const db = new DatabaseSync(":memory:");
   applyPragmas(db);
   if (runMigrations) migrate(db);
   return db;
 }
 
 function applyPragmas(db) {
-  db.exec('PRAGMA journal_mode = WAL');
-  db.exec('PRAGMA foreign_keys = ON');
-  db.exec('PRAGMA busy_timeout = 5000');
+  db.exec("PRAGMA journal_mode = WAL");
+  db.exec("PRAGMA foreign_keys = ON");
+  db.exec("PRAGMA busy_timeout = 5000");
 }

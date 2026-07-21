@@ -1,4 +1,4 @@
-import { EventEmitter } from 'node:events';
+import { EventEmitter } from "node:events";
 
 /**
  * A tiny in-process pub/sub for "the file list may have changed" signals.
@@ -14,5 +14,5 @@ export function createEventBus() {
 
 /** Emit a change signal. `detail` is JSON-serialized to SSE clients. */
 export function emitChange(events, detail = {}) {
-  events?.emit('change', detail);
+  events?.emit("change", detail);
 }

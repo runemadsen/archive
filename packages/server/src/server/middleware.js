@@ -1,4 +1,4 @@
-import { HttpError } from './respond.js';
+import { HttpError } from "./respond.js";
 
 /**
  * Wrap a handler so it only runs for authenticated users. Since v1 has no
@@ -6,7 +6,7 @@ import { HttpError } from './respond.js';
  */
 export function requireAuth(handler) {
   return (req, res, ctx) => {
-    if (!ctx.user) throw new HttpError(401, 'Authentication required');
+    if (!ctx.user) throw new HttpError(401, "Authentication required");
     return handler(req, res, ctx);
   };
 }

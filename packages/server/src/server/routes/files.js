@@ -1,38 +1,53 @@
-import { sendJson, readJson, HttpError } from '../respond.js';
-import { requireAuth } from '../middleware.js';
-import { receiveUpload } from '../upload.js';
-import { thumbnailFor, getThumbnail } from '../../lib/serving.js';
-import { streamBytes, imageCacheControl } from '../render-response.js';
-import { createFile, getFile, listFiles, softDeleteFiles, findDuplicateFile } from '../../lib/files.js';
+import {
+  createFile,
+  getFile,
+  listFiles,
+  softDeleteFiles,
+  findDuplicateFile,
+} from "../../lib/files.js";
+import { thumbnailFor, getThumbnail } from "../../lib/serving.js";
+import { requireAuth } from "../middleware.js";
+import { streamBytes, imageCacheControl } from "../render-response.js";
+import { sendJson, readJson, HttpError } from "../respond.js";
+import { receiveUpload } from "../upload.js";
 
 function intParam(value, what) {
   const n = Number(value);
-  if (!Number.isInteger(n) || n <= 0) throw new HttpError(400, `Invalid ${what}`);
+  if (!Number.isInteger(n) || n <= 0)
+    throw new HttpError(400, `Invalid ${what}`);
   return n;
 }
 
 /** Validate a `{ fileIds }` body → array of positive ints (at least one). */
 function fileIdList(body) {
   const ids = body?.fileIds;
-  if (!Array.isArray(ids) || ids.length === 0) throw new HttpError(400, 'fileIds must be a non-empty array');
-  return ids.map((id) => intParam(id, 'file id'));
+  if (!Array.isArray(ids) || ids.length === 0)
+    throw new HttpError(400, "fileIds must be a non-empty array");
+  return ids.map((id) => intParam(id, "file id"));
 }
 
 /** The camelCase source object plugin capabilities expect, from a file row. */
 function sourceOf(file) {
-  return { contentHash: file.content_hash, mimeType: file.mime_type, filename: file.original_filename };
+  return {
+    contentHash: file.content_hash,
+    mimeType: file.mime_type,
+    filename: file.original_filename,
+  };
 }
 
 export function registerFileRoutes(router) {
   // Upload a new file (one file per request, raw body). Uploading "a new version
   // of this" is just another upload — it creates a new file.
   router.post(
-    '/api/files',
+    "/api/files",
     requireAuth(async (req, res, ctx) => {
       const up = await receiveUpload(req, ctx.blobStore);
 
       // Skip re-importing the exact same file (same name + content hash).
-      const duplicate = findDuplicateFile(ctx.db, { filename: up.filename, hash: up.hash });
+      const duplicate = findDuplicateFile(ctx.db, {
+        filename: up.filename,
+        hash: up.hash,
+      });
       if (duplicate) {
         sendJson(res, 200, { file: duplicate, skipped: true });
         return;
@@ -46,60 +61,67 @@ export function registerFileRoutes(router) {
         userId: ctx.user.id,
       });
       ctx.onFileCreated?.(file.id);
-      ctx.events?.emit('change', { type: 'created', fileId: file.id });
+      ctx.events?.emit("change", { type: "created", fileId: file.id });
       sendJson(res, 201, { file, skipped: false });
-    })
+    }),
   );
 
   router.get(
-    '/api/files',
+    "/api/files",
     requireAuth((req, res, ctx) => {
-      const limit = clamp(Number(ctx.url.searchParams.get('limit')) || 50, 1, 200);
-      const offset = Math.max(0, Number(ctx.url.searchParams.get('offset')) || 0);
+      const limit = clamp(
+        Number(ctx.url.searchParams.get("limit")) || 50,
+        1,
+        200,
+      );
+      const offset = Math.max(
+        0,
+        Number(ctx.url.searchParams.get("offset")) || 0,
+      );
       sendJson(res, 200, listFiles(ctx.db, { limit, offset }));
-    })
+    }),
   );
 
   router.get(
-    '/api/files/:id',
+    "/api/files/:id",
     requireAuth((req, res, ctx) => {
-      const id = intParam(ctx.params.id, 'file id');
+      const id = intParam(ctx.params.id, "file id");
       const file = getFile(ctx.db, id);
-      if (!file) throw new HttpError(404, 'File not found');
+      if (!file) throw new HttpError(404, "File not found");
       sendJson(res, 200, { file });
-    })
+    }),
   );
 
   // Bulk soft-delete. Works with a single id via a one-element array.
   router.delete(
-    '/api/files',
+    "/api/files",
     requireAuth(async (req, res, ctx) => {
       const fileIds = fileIdList(await readJson(req));
       softDeleteFiles(ctx.db, fileIds);
-      ctx.events?.emit('change', { type: 'deleted' });
+      ctx.events?.emit("change", { type: "deleted" });
       sendJson(res, 200, { ok: true, count: fileIds.length });
-    })
+    }),
   );
 
   // Download the file's bytes (Range-enabled for progressive audio/video seeking).
   router.get(
-    '/api/files/:id/download',
+    "/api/files/:id/download",
     requireAuth((req, res, ctx) => {
-      const id = intParam(ctx.params.id, 'file id');
+      const id = intParam(ctx.params.id, "file id");
       const file = getFile(ctx.db, id);
-      if (!file) throw new HttpError(404, 'File not found');
+      if (!file) throw new HttpError(404, "File not found");
       streamFile(req, res, ctx, file);
-    })
+    }),
   );
 
   // The file's single pre-generated thumbnail (404 → the UI shows a placeholder).
   router.get(
-    '/api/files/:id/thumbnail',
+    "/api/files/:id/thumbnail",
     requireAuth(async (req, res, ctx) => {
-      const id = intParam(ctx.params.id, 'file id');
+      const id = intParam(ctx.params.id, "file id");
       const file = getFile(ctx.db, id);
       await serveThumbnail(req, res, ctx, file);
-    })
+    }),
   );
 
   // Plugin renditions/streams (`/api/files/:id/<plugin path>.<ext>`) are served
@@ -112,11 +134,15 @@ export function registerFileRoutes(router) {
  * the cache was cleared). 404 when no plugin provides one.
  */
 async function serveThumbnail(req, res, ctx, file) {
-  if (!file) throw new HttpError(404, 'No thumbnail');
-  const thumb = thumbnailFor(ctx.registry, file.mime_type, file.original_filename);
-  if (!thumb) throw new HttpError(404, 'No thumbnail');
+  if (!file) throw new HttpError(404, "No thumbnail");
+  const thumb = thumbnailFor(
+    ctx.registry,
+    file.mime_type,
+    file.original_filename,
+  );
+  if (!thumb) throw new HttpError(404, "No thumbnail");
   const out = await getThumbnail(ctx, sourceOf(file), thumb);
-  if (!out) throw new HttpError(404, 'No thumbnail');
+  if (!out) throw new HttpError(404, "No thumbnail");
   const { sig, ext, contentType } = out;
   const stat = ctx.derivedStore.statVariant(file.content_hash, sig, ext);
   streamBytes(req, res, {
@@ -124,17 +150,23 @@ async function serveThumbnail(req, res, ctx, file) {
     contentType,
     etag: `"${file.content_hash}-${sig}"`,
     cacheControl: imageCacheControl(ctx),
-    open: (range) => ctx.derivedStore.createVariantReadStream(file.content_hash, sig, ext, range),
+    open: (range) =>
+      ctx.derivedStore.createVariantReadStream(
+        file.content_hash,
+        sig,
+        ext,
+        range,
+      ),
   });
 }
 
 function streamFile(req, res, ctx, file) {
   if (!ctx.blobStore.has(file.content_hash)) {
-    throw new HttpError(410, 'Blob no longer available');
+    throw new HttpError(410, "Blob no longer available");
   }
   streamBytes(req, res, {
     size: file.byte_size,
-    contentType: file.mime_type || 'application/octet-stream',
+    contentType: file.mime_type || "application/octet-stream",
     // The bytes ARE the content hash, so it's a perfect strong validator.
     etag: `"${file.content_hash}"`,
     cacheControl: imageCacheControl(ctx),

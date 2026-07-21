@@ -1,6 +1,7 @@
-import exifr from 'exifr';
-import sharp from 'sharp';
-import { RAW_EXT, MAX_EDGE } from './constants.js';
+import exifr from "exifr";
+import sharp from "sharp";
+
+import { RAW_EXT, MAX_EDGE } from "./constants.js";
 
 // ---- dimensions from file headers (zero-dependency) -----------------------
 
@@ -23,23 +24,30 @@ function png(buf) {
 }
 
 function gif(buf) {
-  if (buf.toString('ascii', 0, 3) !== 'GIF') return null;
+  if (buf.toString("ascii", 0, 3) !== "GIF") return null;
   return { width: buf.readUInt16LE(6), height: buf.readUInt16LE(8) };
 }
 
 function webp(buf) {
-  if (buf.toString('ascii', 0, 4) !== 'RIFF' || buf.toString('ascii', 8, 12) !== 'WEBP') return null;
-  const format = buf.toString('ascii', 12, 16);
-  if (format === 'VP8 ') {
+  if (
+    buf.toString("ascii", 0, 4) !== "RIFF" ||
+    buf.toString("ascii", 8, 12) !== "WEBP"
+  )
+    return null;
+  const format = buf.toString("ascii", 12, 16);
+  if (format === "VP8 ") {
     // lossy: 16-bit width/height (14 bits used) at offset 26
-    return { width: buf.readUInt16LE(26) & 0x3fff, height: buf.readUInt16LE(28) & 0x3fff };
+    return {
+      width: buf.readUInt16LE(26) & 0x3fff,
+      height: buf.readUInt16LE(28) & 0x3fff,
+    };
   }
-  if (format === 'VP8L') {
+  if (format === "VP8L") {
     const b = buf.subarray(21, 26);
     const bits = b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24);
     return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
   }
-  if (format === 'VP8X') {
+  if (format === "VP8X") {
     const width = 1 + (buf[24] | (buf[25] << 8) | (buf[26] << 16));
     const height = 1 + (buf[27] | (buf[28] << 8) | (buf[29] << 16));
     return { width, height };
@@ -58,7 +66,13 @@ function jpeg(buf) {
     }
     const marker = buf[offset + 1];
     // SOF0..SOF15 carry dimensions, except DHT(C4), JPG(C8), DAC(CC).
-    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+    if (
+      marker >= 0xc0 &&
+      marker <= 0xcf &&
+      marker !== 0xc4 &&
+      marker !== 0xc8 &&
+      marker !== 0xcc
+    ) {
       const height = buf.readUInt16BE(offset + 5);
       const width = buf.readUInt16BE(offset + 7);
       return { width, height };
@@ -76,12 +90,12 @@ function jpeg(buf) {
 /** Push width/height (+ derived orientation) onto a metadata array when both are known. */
 export function pushDimensions(metadata, width, height) {
   if (!(width > 0) || !(height > 0)) return;
-  metadata.push({ key: 'width', value: width, type: 'number' });
-  metadata.push({ key: 'height', value: height, type: 'number' });
+  metadata.push({ key: "width", value: width, type: "number" });
+  metadata.push({ key: "height", value: height, type: "number" });
   metadata.push({
-    key: 'orientation',
-    value: width >= height ? 'landscape' : 'portrait',
-    type: 'text',
+    key: "orientation",
+    value: width >= height ? "landscape" : "portrait",
+    type: "text",
   });
 }
 
@@ -92,7 +106,11 @@ export function pushDimensions(metadata, width, height) {
  * JPEG bytes, or null if this isn't a RAF or the header doesn't check out.
  */
 export function rafPreview(buffer) {
-  if (buffer.length < 0x5c || buffer.toString('latin1', 0, 16) !== 'FUJIFILMCCD-RAW ') return null;
+  if (
+    buffer.length < 0x5c ||
+    buffer.toString("latin1", 0, 16) !== "FUJIFILMCCD-RAW "
+  )
+    return null;
   const offset = buffer.readUInt32BE(0x54);
   const length = buffer.readUInt32BE(0x58);
   if (!length || offset + length > buffer.length) return null;
@@ -122,14 +140,22 @@ export async function embeddedPreview(buffer) {
  * @param {Buffer} buffer
  * @param {{width?:number, height?:number, fit?:string, quality?:number, format:string}} opts
  */
-export async function renderImage(buffer, { width, height, fit = 'inside', quality, format } = {}) {
-  const encoder = format === 'jpg' ? 'jpeg' : format;
+export async function renderImage(
+  buffer,
+  { width, height, fit = "inside", quality, format } = {},
+) {
+  const encoder = format === "jpg" ? "jpeg" : format;
   try {
-    let pipeline = sharp(buffer, { failOn: 'none' }).rotate(); // honor EXIF orientation
+    let pipeline = sharp(buffer, { failOn: "none" }).rotate(); // honor EXIF orientation
     if (width || height) {
-      pipeline = pipeline.resize(width ?? null, height ?? null, { fit, withoutEnlargement: true });
+      pipeline = pipeline.resize(width ?? null, height ?? null, {
+        fit,
+        withoutEnlargement: true,
+      });
     }
-    const data = await pipeline.toFormat(encoder, quality ? { quality } : {}).toBuffer();
+    const data = await pipeline
+      .toFormat(encoder, quality ? { quality } : {})
+      .toBuffer();
     return { data, contentType: `image/${encoder}` };
   } catch {
     return null; // undecodable — caller decides (skip thumbnail / 415)
@@ -141,7 +167,7 @@ export async function renderImage(buffer, { width, height, fit = 'inside', quali
 /** Bytes sharp can decode, from the source buffer or a RAW's embedded preview. */
 export async function decodableBuffer(source) {
   const buf = await source.loadBuffer();
-  if (RAW_EXT.test(source.filename || '')) {
+  if (RAW_EXT.test(source.filename || "")) {
     return rafPreview(buf) || (await embeddedPreview(buf));
   }
   return buf;
@@ -152,10 +178,10 @@ export async function decodableBuffer(source) {
  * `{ w, h, fit, q }` (the extension is handled by the core dispatcher).
  */
 export function parseSpecParams(segment) {
-  const base = segment.slice(0, segment.lastIndexOf('.'));
+  const base = segment.slice(0, segment.lastIndexOf("."));
   const params = {};
-  for (const tok of base.split(',')) {
-    const eq = tok.indexOf('=');
+  for (const tok of base.split(",")) {
+    const eq = tok.indexOf("=");
     if (eq !== -1) params[tok.slice(0, eq)] = tok.slice(eq + 1);
   }
   return params;
@@ -169,7 +195,8 @@ export function normalizeSpec(params) {
   if (width) spec.width = width;
   if (height) spec.height = height;
   if (params.fit != null) {
-    if (!['cover', 'contain', 'inside'].includes(params.fit)) throw new Error(`invalid fit: ${params.fit}`);
+    if (!["cover", "contain", "inside"].includes(params.fit))
+      throw new Error(`invalid fit: ${params.fit}`);
     spec.fit = params.fit;
   }
   const quality = clampInt(params.q, 1, 100);

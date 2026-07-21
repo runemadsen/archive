@@ -1,5 +1,5 @@
-import os from 'node:os';
-import path from 'node:path';
+import os from "node:os";
+import path from "node:path";
 
 export const DEFAULT_PORT = 4321;
 
@@ -17,7 +17,9 @@ export function resolveConfig({ argv = [], env = process.env } = {}) {
   const flags = parseFlags(argv);
 
   const dataDir = path.resolve(
-    flags['data-dir'] ?? env.GEMME_DATA_DIR ?? path.join(os.homedir(), '.gemme')
+    flags["data-dir"] ??
+      env.GEMME_DATA_DIR ??
+      path.join(os.homedir(), ".gemme"),
   );
 
   const rawPort = flags.port ?? env.GEMME_PORT ?? env.PORT;
@@ -29,7 +31,11 @@ export function resolveConfig({ argv = [], env = process.env } = {}) {
   // Dev mode disables long-lived file caching (see the image cache policy in
   // routes/files.js): re-running extraction locally must never poison the
   // browser cache. Off by default — real instances run in production mode.
-  const dev = flags.dev === true || flags.dev === 'true' || env.GEMME_DEV === '1' || env.GEMME_DEV === 'true';
+  const dev =
+    flags.dev === true ||
+    flags.dev === "true" ||
+    env.GEMME_DEV === "1" ||
+    env.GEMME_DEV === "true";
 
   return { dataDir, port, dev };
 }
@@ -43,12 +49,12 @@ export function parseFlags(argv) {
   const flags = {};
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (!arg.startsWith('--')) continue;
+    if (!arg.startsWith("--")) continue;
     const body = arg.slice(2);
-    const eq = body.indexOf('=');
+    const eq = body.indexOf("=");
     if (eq !== -1) {
       flags[body.slice(0, eq)] = body.slice(eq + 1);
-    } else if (i + 1 < argv.length && !argv[i + 1].startsWith('--')) {
+    } else if (i + 1 < argv.length && !argv[i + 1].startsWith("--")) {
       flags[body] = argv[++i];
     } else {
       flags[body] = true;

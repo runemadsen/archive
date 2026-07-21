@@ -1,11 +1,11 @@
-import { parseQuery, compileQuery } from './dsl.js';
-import { normalizeControls } from './compose.js';
+import { normalizeControls } from "./compose.js";
+import { parseQuery, compileQuery } from "./dsl.js";
 
 // Whitelisted sort fields -> SQL. `date` is upload time; `name` is the filename
 // (case-insensitive). Keys are validated, so no injection risk.
 const SORT_COLUMNS = {
-  date: 'a.created_at',
-  name: 'a.original_filename COLLATE NOCASE',
+  date: "a.created_at",
+  name: "a.original_filename COLLATE NOCASE",
 };
 
 /**
@@ -14,11 +14,15 @@ const SORT_COLUMNS = {
  * @returns {{items:object[], total:number, limit:number, offset:number,
  *            sort:string, direction:string, query:string}}
  */
-export function searchFiles(db, query = '', { limit = 50, offset = 0, sort = 'date', direction = 'desc' } = {}) {
+export function searchFiles(
+  db,
+  query = "",
+  { limit = 50, offset = 0, sort = "date", direction = "desc" } = {},
+) {
   const column = SORT_COLUMNS[sort] || SORT_COLUMNS.date;
-  const dir = direction === 'asc' ? 'ASC' : 'DESC';
+  const dir = direction === "asc" ? "ASC" : "DESC";
   const { conditions, params } = compileQuery(parseQuery(query));
-  const where = ['a.deleted_at IS NULL', ...conditions].join(' AND ');
+  const where = ["a.deleted_at IS NULL", ...conditions].join(" AND ");
 
   const items = db
     .prepare(
@@ -28,7 +32,7 @@ export function searchFiles(db, query = '', { limit = 50, offset = 0, sort = 'da
          FROM files a
         WHERE ${where}
         ORDER BY ${column} ${dir}, a.id ${dir}
-        LIMIT ? OFFSET ?`
+        LIMIT ? OFFSET ?`,
     )
     .all(...params, limit, offset);
 
@@ -36,7 +40,7 @@ export function searchFiles(db, query = '', { limit = 50, offset = 0, sort = 'da
     .prepare(
       `SELECT COUNT(*) AS c
          FROM files a
-        WHERE ${where}`
+        WHERE ${where}`,
     )
     .get(...params).c;
 
@@ -49,10 +53,18 @@ export function searchFiles(db, query = '', { limit = 50, offset = 0, sort = 'da
  *
  * @returns {{items, total, page, perPage, pages, sort, direction}}
  */
-export function paginatedSearch(db, { query = '', sort, direction, page, perPage } = {}) {
+export function paginatedSearch(
+  db,
+  { query = "", sort, direction, page, perPage } = {},
+) {
   const c = normalizeControls({ sort, direction, page, perPage });
   const run = (p) =>
-    searchFiles(db, query, { limit: c.perPage, offset: (p - 1) * c.perPage, sort: c.sort, direction: c.direction });
+    searchFiles(db, query, {
+      limit: c.perPage,
+      offset: (p - 1) * c.perPage,
+      sort: c.sort,
+      direction: c.direction,
+    });
 
   let result = run(c.page);
   const pages = Math.max(1, Math.ceil(result.total / c.perPage));

@@ -65,9 +65,13 @@ export const apiVersion = 1;
  * @returns {object} the plugin, with `apiVersion` attached
  */
 export function definePlugin(def) {
-  if (!def || typeof def !== 'object') throw new Error('definePlugin requires a definition object');
-  if (!def.id || typeof def.id !== 'string') throw new Error('plugin requires a string `id`');
-  if (typeof def.matches !== 'function') throw new Error(`plugin ${def.id}: matches() must be a function`);
-  if (typeof def.extract !== 'function') throw new Error(`plugin ${def.id}: extract() must be a function`);
+  if (!def || typeof def !== "object")
+    throw new Error("definePlugin requires a definition object");
+  if (!def.id || typeof def.id !== "string")
+    throw new Error("plugin requires a string `id`");
+  if (typeof def.matches !== "function")
+    throw new Error(`plugin ${def.id}: matches() must be a function`);
+  if (typeof def.extract !== "function")
+    throw new Error(`plugin ${def.id}: extract() must be a function`);
   return { apiVersion, ...def };
 }

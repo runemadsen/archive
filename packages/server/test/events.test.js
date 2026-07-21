@@ -1,16 +1,17 @@
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
-import { once } from 'node:events';
-import { startTestApp } from './helpers/server.js';
-import { createUser } from '../src/lib/auth/users.js';
-import { openMemoryDatabase } from '../src/lib/db/index.js';
-import { BlobStore } from '../src/lib/storage/blobs.js';
-import { PluginRegistry } from '../src/lib/plugins/registry.js';
-import { runPending } from '../src/worker/index.js';
-import { enqueueExtraction } from '../src/worker/queue.js';
-import { createEventBus } from '../src/lib/bus.js';
+import assert from "node:assert/strict";
+import { once } from "node:events";
+import { test } from "node:test";
 
-test('/api/events requires auth', async () => {
+import { createUser } from "../src/lib/auth/users.js";
+import { createEventBus } from "../src/lib/bus.js";
+import { openMemoryDatabase } from "../src/lib/db/index.js";
+import { PluginRegistry } from "../src/lib/plugins/registry.js";
+import { BlobStore } from "../src/lib/storage/blobs.js";
+import { runPending } from "../src/worker/index.js";
+import { enqueueExtraction } from "../src/worker/queue.js";
+import { startTestApp } from "./helpers/server.js";
+
+test("/api/events requires auth", async () => {
   const app = await startTestApp();
   try {
     const res = await fetch(`${app.base}/api/events`);
@@ -21,25 +22,33 @@ test('/api/events requires auth', async () => {
   }
 });
 
-test('SSE stream delivers a change event when the bus emits', async () => {
+test("SSE stream delivers a change event when the bus emits", async () => {
   const app = await startTestApp();
   try {
-    await createUser(app.db, { email: 'r@example.com', password: 'supersecret' });
-    await app.post('/api/login', { email: 'r@example.com', password: 'supersecret' });
+    await createUser(app.db, {
+      email: "r@example.com",
+      password: "supersecret",
+    });
+    await app.post("/api/login", {
+      email: "r@example.com",
+      password: "supersecret",
+    });
 
-    const res = await fetch(`${app.base}/api/events`, { headers: { cookie: app.cookieHeader() } });
+    const res = await fetch(`${app.base}/api/events`, {
+      headers: { cookie: app.cookieHeader() },
+    });
     assert.equal(res.status, 200);
-    assert.match(res.headers.get('content-type'), /text\/event-stream/);
+    assert.match(res.headers.get("content-type"), /text\/event-stream/);
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
 
     // Drain the initial ": connected" comment, then emit and read the event.
     await reader.read();
-    app.events.emit('change', { type: 'extracted', fileId: 7 });
+    app.events.emit("change", { type: "extracted", fileId: 7 });
 
-    let buf = '';
-    for (let i = 0; i < 5 && !buf.includes('event: change'); i++) {
+    let buf = "";
+    for (let i = 0; i < 5 && !buf.includes("event: change"); i++) {
       const { value } = await reader.read();
       buf += decoder.decode(value, { stream: true });
     }
@@ -52,39 +61,57 @@ test('SSE stream delivers a change event when the bus emits', async () => {
   }
 });
 
-test('uploading emits a change on the bus', async () => {
+test("uploading emits a change on the bus", async () => {
   const app = await startTestApp();
   try {
-    await createUser(app.db, { email: 'r@example.com', password: 'supersecret' });
-    await app.post('/api/login', { email: 'r@example.com', password: 'supersecret' });
+    await createUser(app.db, {
+      email: "r@example.com",
+      password: "supersecret",
+    });
+    await app.post("/api/login", {
+      email: "r@example.com",
+      password: "supersecret",
+    });
 
-    const changed = once(app.events, 'change');
-    await app.upload('/api/files', { filename: 'a.txt', contentType: 'text/plain', body: 'hi' });
+    const changed = once(app.events, "change");
+    await app.upload("/api/files", {
+      filename: "a.txt",
+      contentType: "text/plain",
+      body: "hi",
+    });
     const [detail] = await changed;
-    assert.equal(detail.type, 'created');
+    assert.equal(detail.type, "created");
   } finally {
     await app.close();
   }
 });
 
-test('the worker emits a change after finishing extraction', async () => {
-  const dir = await (await import('node:fs/promises')).mkdtemp('/tmp/gemme-ev-');
+test("the worker emits a change after finishing extraction", async () => {
+  const dir = await (
+    await import("node:fs/promises")
+  ).mkdtemp("/tmp/gemme-ev-");
   const db = openMemoryDatabase();
   const events = createEventBus();
-  const userId = db.prepare('INSERT INTO users (email, password_hash) VALUES (?, ?)').run('a@b', 'x').lastInsertRowid;
+  const userId = db
+    .prepare("INSERT INTO users (email, password_hash) VALUES (?, ?)")
+    .run("a@b", "x").lastInsertRowid;
   const blobStore = new BlobStore(dir);
-  const { hash, size } = await blobStore.putBuffer(Buffer.from('hello'));
+  const { hash, size } = await blobStore.putBuffer(Buffer.from("hello"));
   const a = db
-    .prepare('INSERT INTO files (original_filename, content_hash, byte_size, mime_type, created_by) VALUES (?, ?, ?, ?, ?)')
-    .run('n.txt', hash, size, 'text/plain', userId);
+    .prepare(
+      "INSERT INTO files (original_filename, content_hash, byte_size, mime_type, created_by) VALUES (?, ?, ?, ?, ?)",
+    )
+    .run("n.txt", hash, size, "text/plain", userId);
 
   enqueueExtraction(db, a.lastInsertRowid);
-  const changed = once(events, 'change');
+  const changed = once(events, "change");
   await runPending(db, { blobStore, registry: new PluginRegistry(), events });
   const [detail] = await changed;
-  assert.equal(detail.type, 'extracted');
+  assert.equal(detail.type, "extracted");
   assert.equal(detail.fileId, a.lastInsertRowid);
 
   db.close();
-  await (await import('node:fs/promises')).rm(dir, { recursive: true, force: true });
+  await (
+    await import("node:fs/promises")
+  ).rm(dir, { recursive: true, force: true });
 });

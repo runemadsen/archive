@@ -1,10 +1,10 @@
-import crypto from 'node:crypto';
-import fs from 'node:fs';
-import fsp from 'node:fs/promises';
-import path from 'node:path';
-import { pipeline } from 'node:stream/promises';
+import crypto from "node:crypto";
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import path from "node:path";
+import { pipeline } from "node:stream/promises";
 
-const HASH_ALGO = 'sha256';
+const HASH_ALGO = "sha256";
 
 /**
  * Content-addressed blob store. Bytes are stored once under their SHA-256
@@ -17,7 +17,7 @@ const HASH_ALGO = 'sha256';
 export class BlobStore {
   /** @param {string} dataDir */
   constructor(dataDir) {
-    this.root = path.join(dataDir, 'blobs');
+    this.root = path.join(dataDir, "blobs");
   }
 
   /** Absolute on-disk path for a hash (whether or not it exists yet). */
@@ -36,7 +36,7 @@ export class BlobStore {
    * @returns {Promise<{hash: string, size: number, deduped: boolean}>}
    */
   async putBuffer(buf) {
-    const hash = crypto.createHash(HASH_ALGO).update(buf).digest('hex');
+    const hash = crypto.createHash(HASH_ALGO).update(buf).digest("hex");
     const dest = this.pathForHash(hash);
     if (fs.existsSync(dest)) {
       return { hash, size: buf.length, deduped: true };
@@ -59,7 +59,7 @@ export class BlobStore {
     const tmp = path.join(this.root, `.tmp-${crypto.randomUUID()}`);
     const hasher = crypto.createHash(HASH_ALGO);
     let size = 0;
-    readable.on('data', (chunk) => {
+    readable.on("data", (chunk) => {
       size += chunk.length;
       hasher.update(chunk);
     });
@@ -69,7 +69,7 @@ export class BlobStore {
       await fsp.rm(tmp, { force: true });
       throw err;
     }
-    const hash = hasher.digest('hex');
+    const hash = hasher.digest("hex");
     const dest = this.pathForHash(hash);
     if (fs.existsSync(dest)) {
       await fsp.rm(tmp, { force: true });

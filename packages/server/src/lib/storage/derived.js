@@ -1,19 +1,19 @@
-import crypto from 'node:crypto';
-import fs from 'node:fs';
-import fsp from 'node:fs/promises';
-import path from 'node:path';
+import crypto from "node:crypto";
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import path from "node:path";
 
 const TYPE_EXT = {
-  'image/webp': 'webp',
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/avif': 'avif',
-  'image/svg+xml': 'svg',
+  "image/webp": "webp",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/avif": "avif",
+  "image/svg+xml": "svg",
 };
 
 /** File extension for a rendition content type. */
 export function extForType(contentType) {
-  return TYPE_EXT[contentType] || 'bin';
+  return TYPE_EXT[contentType] || "bin";
 }
 
 /**
@@ -22,12 +22,13 @@ export function extForType(contentType) {
  * paths, and backslashes. Returns the normalized relative path or null.
  */
 export function safeMember(member) {
-  if (typeof member !== 'string' || member === '') return null;
-  if (member.includes('\\') || member.includes('\0')) return null;
-  if (member.startsWith('/')) return null;
+  if (typeof member !== "string" || member === "") return null;
+  if (member.includes("\\") || member.includes("\0")) return null;
+  if (member.startsWith("/")) return null;
   const norm = path.posix.normalize(member);
-  if (norm.startsWith('../') || norm === '..' || norm.startsWith('/')) return null;
-  if (norm.split('/').some((seg) => seg === '..')) return null;
+  if (norm.startsWith("../") || norm === ".." || norm.startsWith("/"))
+    return null;
+  if (norm.split("/").some((seg) => seg === "..")) return null;
   return norm;
 }
 
@@ -43,11 +44,16 @@ export function safeMember(member) {
  */
 export class DerivedStore {
   constructor(dataDir) {
-    this.root = path.join(dataDir, 'derived');
+    this.root = path.join(dataDir, "derived");
   }
 
   variantPath(hash, sig, ext) {
-    return path.join(this.root, hash.slice(0, 2), hash.slice(2, 4), `${hash}.${sig}.${ext}`);
+    return path.join(
+      this.root,
+      hash.slice(0, 2),
+      hash.slice(2, 4),
+      `${hash}.${sig}.${ext}`,
+    );
   }
 
   hasVariant(hash, sig, ext) {
@@ -82,7 +88,12 @@ export class DerivedStore {
 
   /** Directory holding one bundle's members: <root>/<aa>/<bb>/<hash>.<sig>/ */
   bundleDir(hash, sig) {
-    return path.join(this.root, hash.slice(0, 2), hash.slice(2, 4), `${hash}.${sig}`);
+    return path.join(
+      this.root,
+      hash.slice(0, 2),
+      hash.slice(2, 4),
+      `${hash}.${sig}`,
+    );
   }
 
   /** A bundle is present iff its directory exists (put atomically, see putBundle). */

@@ -1,6 +1,6 @@
 /** True if the client's If-None-Match matches, so we can 304. */
 export function notModified(req, etag) {
-  const inm = req.headers['if-none-match'];
+  const inm = req.headers["if-none-match"];
   return inm != null && inm === etag;
 }
 
@@ -21,7 +21,7 @@ export function notModified(req, etag) {
  * deliberate cost of long-lived image caching.
  */
 export function imageCacheControl(ctx) {
-  return ctx.dev ? 'no-cache' : 'public, max-age=31536000, immutable';
+  return ctx.dev ? "no-cache" : "public, max-age=31536000, immutable";
 }
 
 /**
@@ -35,21 +35,26 @@ export function parseRange(header, size) {
   const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
   if (!m) return null; // ignore multi-range / malformed → full 200
   const [, rawStart, rawEnd] = m;
-  if (rawStart === '' && rawEnd === '') return null;
+  if (rawStart === "" && rawEnd === "") return null;
   let start;
   let end;
-  if (rawStart === '') {
+  if (rawStart === "") {
     // Suffix: last N bytes.
     const n = Number(rawEnd);
-    if (n <= 0) return 'unsatisfiable';
+    if (n <= 0) return "unsatisfiable";
     start = Math.max(0, size - n);
     end = size - 1;
   } else {
     start = Number(rawStart);
-    end = rawEnd === '' ? size - 1 : Math.min(Number(rawEnd), size - 1);
+    end = rawEnd === "" ? size - 1 : Math.min(Number(rawEnd), size - 1);
   }
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= size) {
-    return 'unsatisfiable';
+  if (
+    !Number.isFinite(start) ||
+    !Number.isFinite(end) ||
+    start > end ||
+    start >= size
+  ) {
+    return "unsatisfiable";
   }
   return { start, end };
 }
@@ -62,9 +67,17 @@ export function parseRange(header, size) {
  * @param {{size:number, contentType:string, etag:string, cacheControl:string,
  *          disposition?:string, open:(range:{start:number,end:number})=>import('node:stream').Readable}} opts
  */
-export function streamBytes(req, res, { size, contentType, etag, cacheControl, disposition, open }) {
-  const base = { etag, 'cache-control': cacheControl, 'accept-ranges': 'bytes' };
-  if (disposition) base['content-disposition'] = disposition;
+export function streamBytes(
+  req,
+  res,
+  { size, contentType, etag, cacheControl, disposition, open },
+) {
+  const base = {
+    etag,
+    "cache-control": cacheControl,
+    "accept-ranges": "bytes",
+  };
+  if (disposition) base["content-disposition"] = disposition;
 
   if (notModified(req, etag)) {
     res.writeHead(304, base);
@@ -73,8 +86,8 @@ export function streamBytes(req, res, { size, contentType, etag, cacheControl, d
   }
 
   const range = parseRange(req.headers.range, size);
-  if (range === 'unsatisfiable') {
-    res.writeHead(416, { ...base, 'content-range': `bytes */${size}` });
+  if (range === "unsatisfiable") {
+    res.writeHead(416, { ...base, "content-range": `bytes */${size}` });
     res.end();
     return;
   }
@@ -83,16 +96,20 @@ export function streamBytes(req, res, { size, contentType, etag, cacheControl, d
     const { start, end } = range;
     res.writeHead(206, {
       ...base,
-      'content-type': contentType,
-      'content-range': `bytes ${start}-${end}/${size}`,
-      'content-length': end - start + 1,
+      "content-type": contentType,
+      "content-range": `bytes ${start}-${end}/${size}`,
+      "content-length": end - start + 1,
     });
-    if (req.method === 'HEAD') return res.end();
+    if (req.method === "HEAD") return res.end();
     open({ start, end }).pipe(res);
     return;
   }
 
-  res.writeHead(200, { ...base, 'content-type': contentType, 'content-length': size });
-  if (req.method === 'HEAD') return res.end();
+  res.writeHead(200, {
+    ...base,
+    "content-type": contentType,
+    "content-length": size,
+  });
+  if (req.method === "HEAD") return res.end();
   open({ start: 0, end: size - 1 }).pipe(res);
 }

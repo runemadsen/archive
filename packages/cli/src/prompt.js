@@ -1,4 +1,4 @@
-import readline from 'node:readline';
+import readline from "node:readline";
 
 /**
  * True only when we can actually run an interactive prompt — which needs BOTH
@@ -21,7 +21,10 @@ export function isInteractive() {
  * @param {NodeJS.ReadableStream} [opts.input]
  * @param {NodeJS.WritableStream} [opts.output]
  */
-export function createPrompter({ input = process.stdin, output = process.stdout } = {}) {
+export function createPrompter({
+  input = process.stdin,
+  output = process.stdout,
+} = {}) {
   const rl = readline.createInterface({ input, output });
   let muted = false;
 
@@ -29,7 +32,7 @@ export function createPrompter({ input = process.stdin, output = process.stdout 
   // question text itself is written before muting, so it still shows.
   rl._writeToOutput = (str) => {
     if (muted) {
-      if (/[\r\n]/.test(str)) output.write('\n');
+      if (/[\r\n]/.test(str)) output.write("\n");
       return;
     }
     output.write(str);
@@ -37,7 +40,9 @@ export function createPrompter({ input = process.stdin, output = process.stdout 
 
   return {
     ask(question) {
-      return new Promise((resolve) => rl.question(question, (answer) => resolve(answer.trim())));
+      return new Promise((resolve) =>
+        rl.question(question, (answer) => resolve(answer.trim())),
+      );
     },
     askHidden(question) {
       return new Promise((resolve) => {

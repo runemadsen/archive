@@ -1,6 +1,6 @@
-import crypto from 'node:crypto';
+import crypto from "node:crypto";
 
-export const SESSION_COOKIE = 'gemme_session';
+export const SESSION_COOKIE = "gemme_session";
 const DEFAULT_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 /**
@@ -8,13 +8,11 @@ const DEFAULT_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
  * @returns {string} token
  */
 export function createSession(db, userId, ttlMs = DEFAULT_TTL_MS) {
-  const token = crypto.randomBytes(32).toString('base64url');
+  const token = crypto.randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + ttlMs).toISOString();
-  db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(
-    token,
-    userId,
-    expiresAt
-  );
+  db.prepare(
+    "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
+  ).run(token, userId, expiresAt);
   return token;
 }
 
@@ -30,7 +28,7 @@ export function getSessionUser(db, token) {
         `SELECT u.id, u.email, u.name, u.created_at
            FROM sessions s
            JOIN users u ON u.id = s.user_id
-          WHERE s.token = ? AND s.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`
+          WHERE s.token = ? AND s.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
       )
       .get(token) ?? null
   );
@@ -38,13 +36,15 @@ export function getSessionUser(db, token) {
 
 export function deleteSession(db, token) {
   if (!token) return;
-  db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+  db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
 }
 
 /** Remove expired sessions. Safe to call periodically. */
 export function pruneExpiredSessions(db) {
   return db
-    .prepare("DELETE FROM sessions WHERE expires_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')")
+    .prepare(
+      "DELETE FROM sessions WHERE expires_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+    )
     .run().changes;
 }
 
@@ -54,8 +54,8 @@ export function pruneExpiredSessions(db) {
 export function parseCookies(header) {
   const out = {};
   if (!header) return out;
-  for (const part of header.split(';')) {
-    const eq = part.indexOf('=');
+  for (const part of header.split(";")) {
+    const eq = part.indexOf("=");
     if (eq === -1) continue;
     const k = part.slice(0, eq).trim();
     const v = part.slice(eq + 1).trim();
@@ -65,16 +65,19 @@ export function parseCookies(header) {
 }
 
 /** Serialize the session cookie. `secure` should be true behind HTTPS. */
-export function serializeSessionCookie(token, { secure = false, ttlMs = DEFAULT_TTL_MS } = {}) {
+export function serializeSessionCookie(
+  token,
+  { secure = false, ttlMs = DEFAULT_TTL_MS } = {},
+) {
   const attrs = [
     `${SESSION_COOKIE}=${token}`,
-    'Path=/',
-    'HttpOnly',
-    'SameSite=Lax',
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
     `Max-Age=${Math.floor(ttlMs / 1000)}`,
   ];
-  if (secure) attrs.push('Secure');
-  return attrs.join('; ');
+  if (secure) attrs.push("Secure");
+  return attrs.join("; ");
 }
 
 export function clearSessionCookie() {

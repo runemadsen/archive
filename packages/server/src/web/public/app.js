@@ -11,36 +11,51 @@
 // touching query state. Rendering uses keyed reconciliation.
 
 const esc = (s) =>
-  String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  String(s ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
 
 function fmtSize(bytes) {
-  if (bytes == null) return '';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let n = bytes, i = 0;
-  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+  if (bytes == null) return "";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let n = bytes,
+    i = 0;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i++;
+  }
   return `${i === 0 ? n : n.toFixed(1)} ${units[i]}`;
 }
 
 // ---- cards + keyed reconciliation ----------------------------------------
 
 function cardSig(item) {
-  return [item.thumbnail_type || '', item.extraction_status, item.byte_size, item.original_filename].join('|');
+  return [
+    item.thumbnail_type || "",
+    item.extraction_status,
+    item.byte_size,
+    item.original_filename,
+  ].join("|");
 }
 
 function cardInner(item) {
-  const pending = item.extraction_status === 'pending';
+  const pending = item.extraction_status === "pending";
   const thumb = item.thumbnail_type
     ? `<div class="thumb"><img loading="lazy" src="/api/files/${item.id}/thumbnail" alt=""></div>`
-    : `<div class="thumb"><div class="filetype">${esc((item.mime_type || 'file').split('/').pop())}</div></div>`;
+    : `<div class="thumb"><div class="filetype">${esc((item.mime_type || "file").split("/").pop())}</div></div>`;
   return `${thumb}<div class="meta">
     <div class="name" title="${esc(item.original_filename)}">${esc(item.original_filename)}</div>
-    <div class="sub">${esc(fmtSize(item.byte_size))}${pending ? ' · <span class="badge">processing…</span>' : ''}</div>
+    <div class="sub">${esc(fmtSize(item.byte_size))}${pending ? ' · <span class="badge">processing…</span>' : ""}</div>
   </div>`;
 }
 
 function makeCard(item) {
-  const a = document.createElement('a');
-  a.className = 'card';
+  const a = document.createElement("a");
+  a.className = "card";
   a.href = `/files/${item.id}`;
   a.dataset.id = String(item.id);
   a.dataset.sig = cardSig(item);
@@ -59,7 +74,8 @@ function reconcile(grid, items) {
     grid.innerHTML = `<p class="empty">No matches.</p>`;
     return;
   }
-  for (const child of [...grid.children]) if (!child.dataset || !child.dataset.id) child.remove();
+  for (const child of [...grid.children])
+    if (!child.dataset || !child.dataset.id) child.remove();
   const existing = new Map([...grid.children].map((el) => [el.dataset.id, el]));
   const seen = new Set();
   for (const item of items) {
@@ -75,11 +91,11 @@ function reconcile(grid, items) {
 
 async function fetchResults(state) {
   const sp = new URLSearchParams();
-  sp.set('q', composeQuery(state.text, state.filters));
-  sp.set('sort', state.sort);
-  sp.set('direction', state.direction);
-  sp.set('page', String(state.page));
-  sp.set('perPage', String(state.perPage));
+  sp.set("q", composeQuery(state.text, state.filters));
+  sp.set("sort", state.sort);
+  sp.set("direction", state.direction);
+  sp.set("page", String(state.page));
+  sp.set("perPage", String(state.perPage));
   const res = await fetch(`/api/search?${sp.toString()}`);
   const body = await res.json().catch(() => ({}));
   if (!res.ok) return { error: body.error || `HTTP ${res.status}` };
@@ -91,45 +107,48 @@ async function fetchResults(state) {
 // Facet sections shown in the sidebar. Add a key here to add a filter (the
 // backend facet API is key-driven). FACET_KEYS mirrors compose.js on the server.
 const FACETS = [
-  { key: 'ext', label: 'Extension' },
-  { key: 'type', label: 'Type' },
+  { key: "ext", label: "Extension" },
+  { key: "type", label: "Type" },
 ];
 const FACET_KEYS = FACETS.map((f) => f.key);
 // All keys recognized as filters in the query string (facets + collection).
-const FILTER_KEYS = [...FACET_KEYS, 'collection'];
+const FILTER_KEYS = [...FACET_KEYS, "collection"];
 
 // View controls (sort/pagination). Mirror compose.js on the server.
-const SORT_KEYS = ['date', 'name'];
-const SORT_LABELS = { date: 'Upload date', name: 'Filename' };
-const PER_PAGE_OPTIONS = [25, 50, 100, 200];
-const DEFAULTS = { sort: 'date', direction: 'desc', page: 1, perPage: 50 };
-const RESERVED = new Set(['q', 'sort', 'direction', 'page', 'perPage']);
+const SORT_KEYS = ["date", "name"];
+const DEFAULTS = { sort: "date", direction: "desc", page: 1, perPage: 50 };
+const RESERVED = new Set(["q", "sort", "direction", "page", "perPage"]);
 
 function normalizeControls(c = {}) {
   const p = Math.floor(Number(c.page));
   const pp = Math.floor(Number(c.perPage));
   return {
     sort: SORT_KEYS.includes(c.sort) ? c.sort : DEFAULTS.sort,
-    direction: c.direction === 'asc' || c.direction === 'desc' ? c.direction : DEFAULTS.direction,
+    direction:
+      c.direction === "asc" || c.direction === "desc"
+        ? c.direction
+        : DEFAULTS.direction,
     page: Number.isFinite(p) && p >= 1 ? p : DEFAULTS.page,
-    perPage: Number.isFinite(pp) && pp >= 1 ? Math.min(pp, 200) : DEFAULTS.perPage,
+    perPage:
+      Number.isFinite(pp) && pp >= 1 ? Math.min(pp, 200) : DEFAULTS.perPage,
   };
 }
 
 function quoteValue(v) {
   const s = String(v);
-  return s === '' || /[\s,"]/.test(s) ? `"${s.replace(/"/g, '')}"` : s;
+  return s === "" || /[\s,"]/.test(s) ? `"${s.replace(/"/g, "")}"` : s;
 }
 
 // { text, filters } -> canonical query string (also what we execute).
 function composeQuery(text, filters) {
   const parts = [];
-  const t = (text || '').trim();
+  const t = (text || "").trim();
   if (t) parts.push(t);
   for (const [key, values] of Object.entries(filters || {})) {
-    if (values && values.length) parts.push(`${key}=${values.map(quoteValue).join(',')}`);
+    if (values && values.length)
+      parts.push(`${key}=${values.map(quoteValue).join(",")}`);
   }
-  return parts.join(' ');
+  return parts.join(" ");
 }
 
 // Typed query string -> { text, filters }, extracting facet commands.
@@ -137,24 +156,28 @@ function parseQueryString(input, facetKeys = FILTER_KEYS) {
   const keys = new Set(facetKeys);
   const filters = {};
   const rest = [];
-  for (const tok of tokenizeQuery(input || '')) {
+  for (const tok of tokenizeQuery(input || "")) {
     const m = /^([A-Za-z_][\w.]*)[:=](.*)$/.exec(tok);
     if (m && keys.has(m[1])) {
       const values = splitList(m[2]);
-      if (values.length) filters[m[1]] = mergeValues(filters[m[1]] || [], values);
+      if (values.length)
+        filters[m[1]] = mergeValues(filters[m[1]] || [], values);
     } else {
       rest.push(tok);
     }
   }
-  return { text: rest.join(' ').trim(), filters };
+  return { text: rest.join(" ").trim(), filters };
 }
 
 function splitList(raw) {
-  if (raw.length >= 2 && raw[0] === '"' && raw.endsWith('"')) return [raw.slice(1, -1)];
+  if (raw.length >= 2 && raw[0] === '"' && raw.endsWith('"'))
+    return [raw.slice(1, -1)];
   return raw
-    .split(',')
+    .split(",")
     .map((s) => s.trim())
-    .map((s) => (s.length >= 2 && s[0] === '"' && s.endsWith('"') ? s.slice(1, -1) : s))
+    .map((s) =>
+      s.length >= 2 && s[0] === '"' && s.endsWith('"') ? s.slice(1, -1) : s,
+    )
     .filter((s) => s.length > 0);
 }
 
@@ -165,7 +188,8 @@ function mergeValues(a, b) {
 
 function mergeFilters(a, b) {
   const out = { ...a };
-  for (const [key, values] of Object.entries(b)) out[key] = mergeValues(out[key] || [], values);
+  for (const [key, values] of Object.entries(b))
+    out[key] = mergeValues(out[key] || [], values);
   return out;
 }
 
@@ -176,10 +200,11 @@ function tokenizeQuery(input) {
   while (i < n) {
     while (i < n && /\s/.test(input[i])) i++;
     if (i >= n) break;
-    let tok = '';
+    let tok = "";
     while (i < n && !/\s/.test(input[i])) {
       if (input[i] === '"') {
-        tok += '"'; i++;
+        tok += '"';
+        i++;
         while (i < n && input[i] !== '"') tok += input[i++];
         if (i < n) tok += input[i++];
       } else {
@@ -196,15 +221,15 @@ function resolveUrlState() {
   const fromParams = {};
   for (const key of new Set(sp.keys())) {
     if (RESERVED.has(key)) continue;
-    const values = sp.getAll(key).filter((v) => v !== '');
+    const values = sp.getAll(key).filter((v) => v !== "");
     if (values.length) fromParams[key] = values;
   }
-  const { text, filters: fromText } = parseQueryString(sp.get('q') || '');
+  const { text, filters: fromText } = parseQueryString(sp.get("q") || "");
   const controls = normalizeControls({
-    sort: sp.get('sort'),
-    direction: sp.get('direction'),
-    page: sp.get('page'),
-    perPage: sp.get('perPage'),
+    sort: sp.get("sort"),
+    direction: sp.get("direction"),
+    page: sp.get("page"),
+    perPage: sp.get("perPage"),
   });
   return { text, filters: mergeFilters(fromParams, fromText), ...controls };
 }
@@ -212,14 +237,15 @@ function resolveUrlState() {
 // Full state -> URLSearchParams (only non-default controls). Mirrors stateToUrl.
 function stateToParams(state) {
   const sp = new URLSearchParams();
-  const t = (state.text || '').trim();
-  if (t) sp.set('q', t);
-  for (const [key, values] of Object.entries(state.filters || {})) for (const v of values) sp.append(key, v);
+  const t = (state.text || "").trim();
+  if (t) sp.set("q", t);
+  for (const [key, values] of Object.entries(state.filters || {}))
+    for (const v of values) sp.append(key, v);
   const c = normalizeControls(state);
-  if (c.sort !== DEFAULTS.sort) sp.set('sort', c.sort);
-  if (c.direction !== DEFAULTS.direction) sp.set('direction', c.direction);
-  if (c.page !== DEFAULTS.page) sp.set('page', String(c.page));
-  if (c.perPage !== DEFAULTS.perPage) sp.set('perPage', String(c.perPage));
+  if (c.sort !== DEFAULTS.sort) sp.set("sort", c.sort);
+  if (c.direction !== DEFAULTS.direction) sp.set("direction", c.direction);
+  if (c.page !== DEFAULTS.page) sp.set("page", String(c.page));
+  if (c.perPage !== DEFAULTS.perPage) sp.set("perPage", String(c.perPage));
   return sp;
 }
 
@@ -229,13 +255,13 @@ function urlFor(state) {
 }
 
 function writeUrlState(state) {
-  history.replaceState(null, '', urlFor(state));
+  history.replaceState(null, "", urlFor(state));
 }
 
 // ---- the store: single source of truth for search + filters --------------
 
 const store = {
-  text: '',
+  text: "",
   filters: {},
   sort: DEFAULTS.sort,
   direction: DEFAULTS.direction,
@@ -243,7 +269,10 @@ const store = {
   perPage: DEFAULTS.perPage,
   listeners: new Set(),
   init(state) {
-    Object.assign(this, normalizeControls(state), { text: state.text, filters: state.filters });
+    Object.assign(this, normalizeControls(state), {
+      text: state.text,
+      filters: state.filters,
+    });
   },
   snapshot() {
     return {
@@ -319,7 +348,14 @@ const store = {
 // batch into a collection in one request.
 class GemmeFiles extends HTMLElement {
   connectedCallback() {
-    this.grid = this.querySelector('#results') || this.appendChild(Object.assign(document.createElement('div'), { id: 'results', className: 'grid' }));
+    this.grid =
+      this.querySelector("#results") ||
+      this.appendChild(
+        Object.assign(document.createElement("div"), {
+          id: "results",
+          className: "grid",
+        }),
+      );
     this.seq = 0;
     this.debounce = null;
     this.selecting = false;
@@ -334,15 +370,15 @@ class GemmeFiles extends HTMLElement {
       this.refresh();
     });
     this.onData = () => this.scheduleRefresh();
-    document.addEventListener('gemme:changed', this.onData);
-    document.addEventListener('gemme:server-change', this.onData);
+    document.addEventListener("gemme:changed", this.onData);
+    document.addEventListener("gemme:server-change", this.onData);
     connectServerEvents();
   }
 
   disconnectedCallback() {
     this.unsubscribe?.();
-    document.removeEventListener('gemme:changed', this.onData);
-    document.removeEventListener('gemme:server-change', this.onData);
+    document.removeEventListener("gemme:changed", this.onData);
+    document.removeEventListener("gemme:server-change", this.onData);
     clearTimeout(this.debounce);
   }
 
@@ -357,23 +393,30 @@ class GemmeFiles extends HTMLElement {
     if (seq !== this.seq) return;
     if (data.error) {
       this.grid.innerHTML = `<p class="error">${esc(data.error)}</p>`;
-      document.dispatchEvent(new CustomEvent('gemme:results', { detail: { page: 1, pages: 1, total: 0 } }));
+      document.dispatchEvent(
+        new CustomEvent("gemme:results", {
+          detail: { page: 1, pages: 1, total: 0 },
+        }),
+      );
       return;
     }
     reconcile(this.grid, data.items || []);
     this.applySelection(); // re-mark surviving cards; drop ids that vanished
     // If the server clamped the page (e.g. filters shrank the result set),
     // adopt it without triggering another fetch.
-    if (typeof data.page === 'number' && data.page !== store.page) store.adoptPage(data.page);
+    if (typeof data.page === "number" && data.page !== store.page)
+      store.adoptPage(data.page);
     document.dispatchEvent(
-      new CustomEvent('gemme:results', { detail: { page: data.page, pages: data.pages, total: data.total } })
+      new CustomEvent("gemme:results", {
+        detail: { page: data.page, pages: data.pages, total: data.total },
+      }),
     );
   }
 
   // ---- select mode ----
   buildToolbar() {
-    const bar = document.createElement('div');
-    bar.className = 'selecttoolbar';
+    const bar = document.createElement("div");
+    bar.className = "selecttoolbar";
     bar.innerHTML = `
       <button type="button" class="select-toggle">Select</button>
       <div class="selectbar" hidden>
@@ -384,27 +427,29 @@ class GemmeFiles extends HTMLElement {
         <span class="selhint sub"></span>
       </div>`;
     this.insertBefore(bar, this.grid);
-    this.toggleBtn = bar.querySelector('.select-toggle');
-    this.bar = bar.querySelector('.selectbar');
-    this.count = bar.querySelector('.selcount');
-    this.collectionSelect = bar.querySelector('.selcollection');
-    this.addBtn = bar.querySelector('.seladd');
-    this.hint = bar.querySelector('.selhint');
+    this.toggleBtn = bar.querySelector(".select-toggle");
+    this.bar = bar.querySelector(".selectbar");
+    this.count = bar.querySelector(".selcount");
+    this.collectionSelect = bar.querySelector(".selcollection");
+    this.addBtn = bar.querySelector(".seladd");
+    this.hint = bar.querySelector(".selhint");
 
-    this.toggleBtn.addEventListener('click', () => this.toggleSelecting());
-    this.addBtn.addEventListener('click', () => this.add());
-    bar.querySelector('.selclear').addEventListener('click', () => this.clearSelection());
-    this.collectionSelect.addEventListener('change', () => this.updateBar());
+    this.toggleBtn.addEventListener("click", () => this.toggleSelecting());
+    this.addBtn.addEventListener("click", () => this.add());
+    bar
+      .querySelector(".selclear")
+      .addEventListener("click", () => this.clearSelection());
+    this.collectionSelect.addEventListener("change", () => this.updateBar());
     // Intercept card clicks while selecting so they toggle instead of navigate.
-    this.grid.addEventListener('click', (e) => this.onCardClick(e));
+    this.grid.addEventListener("click", (e) => this.onCardClick(e));
   }
 
   toggleSelecting() {
     this.selecting = !this.selecting;
-    this.grid.classList.toggle('selecting', this.selecting);
+    this.grid.classList.toggle("selecting", this.selecting);
     this.bar.hidden = !this.selecting;
-    this.toggleBtn.textContent = this.selecting ? 'Done' : 'Select';
-    this.toggleBtn.classList.toggle('active', this.selecting);
+    this.toggleBtn.textContent = this.selecting ? "Done" : "Select";
+    this.toggleBtn.classList.toggle("active", this.selecting);
     if (this.selecting) this.loadCollections();
     else this.clearSelection();
     this.updateBar();
@@ -412,20 +457,22 @@ class GemmeFiles extends HTMLElement {
 
   onCardClick(e) {
     if (!this.selecting) return;
-    const card = e.target.closest('.card');
+    const card = e.target.closest(".card");
     if (!card || !this.grid.contains(card)) return;
     e.preventDefault(); // don't navigate to the detail page
     const id = card.dataset.id;
     if (this.selected.has(id)) this.selected.delete(id);
     else this.selected.add(id);
-    card.classList.toggle('selected', this.selected.has(id));
-    this.hint.textContent = '';
+    card.classList.toggle("selected", this.selected.has(id));
+    this.hint.textContent = "";
     this.updateBar();
   }
 
   clearSelection() {
     this.selected.clear();
-    this.grid.querySelectorAll('.card.selected').forEach((c) => c.classList.remove('selected'));
+    this.grid
+      .querySelectorAll(".card.selected")
+      .forEach((c) => c.classList.remove("selected"));
     this.updateBar();
   }
 
@@ -433,11 +480,12 @@ class GemmeFiles extends HTMLElement {
   // longer in the grid (e.g. filtered out or deleted).
   applySelection() {
     const present = new Set();
-    this.grid.querySelectorAll('.card').forEach((c) => {
+    this.grid.querySelectorAll(".card").forEach((c) => {
       present.add(c.dataset.id);
-      c.classList.toggle('selected', this.selected.has(c.dataset.id));
+      c.classList.toggle("selected", this.selected.has(c.dataset.id));
     });
-    for (const id of [...this.selected]) if (!present.has(id)) this.selected.delete(id);
+    for (const id of [...this.selected])
+      if (!present.has(id)) this.selected.delete(id);
     this.updateBar();
   }
 
@@ -446,7 +494,9 @@ class GemmeFiles extends HTMLElement {
     this.collectionSelect.innerHTML = roots.length
       ? collectionOptions(roots)
       : `<option value="">No collections yet</option>`;
-    this.hint.textContent = roots.length ? '' : 'Create a collection first, on the Collections page.';
+    this.hint.textContent = roots.length
+      ? ""
+      : "Create a collection first, on the Collections page.";
     this.updateBar();
   }
 
@@ -463,17 +513,19 @@ class GemmeFiles extends HTMLElement {
     if (!cid || !fileIds.length) return;
     this.addBtn.disabled = true;
     const res = await fetch(`/api/collections/${cid}/files`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ fileIds }),
     });
     if (res.ok) {
-      const label = this.collectionSelect.selectedOptions[0]?.textContent.trim() || 'collection';
-      this.hint.textContent = `Added ${fileIds.length} file${fileIds.length === 1 ? '' : 's'} to ${label}.`;
+      const label =
+        this.collectionSelect.selectedOptions[0]?.textContent.trim() ||
+        "collection";
+      this.hint.textContent = `Added ${fileIds.length} file${fileIds.length === 1 ? "" : "s"} to ${label}.`;
       this.clearSelection();
-      document.dispatchEvent(new CustomEvent('gemme:changed')); // refresh sidebar counts + grid
+      document.dispatchEvent(new CustomEvent("gemme:changed")); // refresh sidebar counts + grid
     } else {
-      this.hint.textContent = 'Could not add to collection.';
+      this.hint.textContent = "Could not add to collection.";
       this.updateBar();
     }
   }
@@ -482,13 +534,13 @@ class GemmeFiles extends HTMLElement {
 // <gemme-search> — shows the canonical query; searches only on Enter.
 class GemmeSearch extends HTMLElement {
   connectedCallback() {
-    const placeholder = this.getAttribute('placeholder') || 'Search…';
+    const placeholder = this.getAttribute("placeholder") || "Search…";
     this.innerHTML = `<input type="search" class="search" placeholder="${esc(placeholder)}" autocomplete="off">`;
-    this.input = this.querySelector('input');
+    this.input = this.querySelector("input");
     this.render();
     this.unsubscribe = store.subscribe(() => this.render());
-    this.input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
+    this.input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
         e.preventDefault();
         store.setFromString(this.input.value);
       }
@@ -501,7 +553,8 @@ class GemmeSearch extends HTMLElement {
 
   render() {
     // Reflect canonical state, but don't clobber what the user is mid-typing.
-    if (document.activeElement !== this.input) this.input.value = store.queryString();
+    if (document.activeElement !== this.input)
+      this.input.value = store.queryString();
   }
 }
 
@@ -513,15 +566,15 @@ class GemmeFilters extends HTMLElement {
     this.innerHTML = `<p class="empty">Loading…</p>`;
     this.unsubscribe = store.subscribe(() => this.render());
     this.onData = () => this.scheduleLoad();
-    document.addEventListener('gemme:changed', this.onData);
-    document.addEventListener('gemme:server-change', this.onData);
+    document.addEventListener("gemme:changed", this.onData);
+    document.addEventListener("gemme:server-change", this.onData);
     this.load();
   }
 
   disconnectedCallback() {
     this.unsubscribe?.();
-    document.removeEventListener('gemme:changed', this.onData);
-    document.removeEventListener('gemme:server-change', this.onData);
+    document.removeEventListener("gemme:changed", this.onData);
+    document.removeEventListener("gemme:server-change", this.onData);
     clearTimeout(this.debounce);
   }
 
@@ -531,7 +584,9 @@ class GemmeFilters extends HTMLElement {
   }
 
   async load() {
-    const res = await fetch(`/api/facets?keys=${encodeURIComponent(FACET_KEYS.join(','))}`);
+    const res = await fetch(
+      `/api/facets?keys=${encodeURIComponent(FACET_KEYS.join(","))}`,
+    );
     if (!res.ok) return;
     this.facets = (await res.json()).facets || {};
     this.render();
@@ -539,27 +594,32 @@ class GemmeFilters extends HTMLElement {
 
   render() {
     const { filters } = store.snapshot();
-    const sections = FACETS.map((f) => this.section(f, filters)).filter(Boolean);
-    this.innerHTML = sections.join('') || '<p class="empty">No filters yet.</p>';
-    this.querySelectorAll('input[type=checkbox]').forEach((cb) =>
-      cb.addEventListener('change', () => store.toggleFilter(cb.dataset.key, cb.value, cb.checked))
+    const sections = FACETS.map((f) => this.section(f, filters)).filter(
+      Boolean,
+    );
+    this.innerHTML =
+      sections.join("") || '<p class="empty">No filters yet.</p>';
+    this.querySelectorAll("input[type=checkbox]").forEach((cb) =>
+      cb.addEventListener("change", () =>
+        store.toggleFilter(cb.dataset.key, cb.value, cb.checked),
+      ),
     );
   }
 
   section(facet, filters) {
     const values = this.facets[facet.key] || [];
-    if (!values.length) return '';
+    if (!values.length) return "";
     const sel = new Set(filters[facet.key] || []);
     const opts = values
       .map((v) => {
-        const val = v.value ?? '';
-        const label = val === '' ? '(none)' : val;
+        const val = v.value ?? "";
+        const label = val === "" ? "(none)" : val;
         return `<label class="facet-opt">
-          <input type="checkbox" data-key="${esc(facet.key)}" value="${esc(val)}" ${sel.has(val) ? 'checked' : ''}>
+          <input type="checkbox" data-key="${esc(facet.key)}" value="${esc(val)}" ${sel.has(val) ? "checked" : ""}>
           <span class="facet-name">${esc(label)}</span><span class="count">${v.count}</span>
         </label>`;
       })
-      .join('');
+      .join("");
     return `<section class="facet"><h3>${esc(facet.label)}</h3>${opts}</section>`;
   }
 }
@@ -569,13 +629,13 @@ class GemmeFilters extends HTMLElement {
 class GemmeControls extends HTMLElement {
   connectedCallback() {
     this.selects = {};
-    for (const sel of this.querySelectorAll('select[data-control]')) {
+    for (const sel of this.querySelectorAll("select[data-control]")) {
       this.selects[sel.dataset.control] = sel;
-      sel.addEventListener('change', () => {
+      sel.addEventListener("change", () => {
         const v = sel.value;
-        if (sel.dataset.control === 'sort') store.setSort(v);
-        else if (sel.dataset.control === 'direction') store.setDirection(v);
-        else if (sel.dataset.control === 'perPage') store.setPerPage(v);
+        if (sel.dataset.control === "sort") store.setSort(v);
+        else if (sel.dataset.control === "direction") store.setDirection(v);
+        else if (sel.dataset.control === "perPage") store.setPerPage(v);
       });
     }
     this.unsubscribe = store.subscribe((s) => this.sync(s));
@@ -602,9 +662,9 @@ class GemmePager extends HTMLElement {
       this.pages = e.detail.pages || 1;
       this.render();
     };
-    document.addEventListener('gemme:results', this.onResults);
-    this.addEventListener('click', (e) => {
-      const link = e.target.closest('a.page[data-page]');
+    document.addEventListener("gemme:results", this.onResults);
+    this.addEventListener("click", (e) => {
+      const link = e.target.closest("a.page[data-page]");
       if (!link) return;
       e.preventDefault();
       store.setPage(Number(link.dataset.page));
@@ -612,7 +672,7 @@ class GemmePager extends HTMLElement {
     // Server already rendered the initial pager markup; leave it in place.
   }
   disconnectedCallback() {
-    document.removeEventListener('gemme:results', this.onResults);
+    document.removeEventListener("gemme:results", this.onResults);
   }
   render() {
     this.innerHTML = pagerHtml(this.page, this.pages);
@@ -621,12 +681,13 @@ class GemmePager extends HTMLElement {
 
 function pageWindow(page, pages, radius = 2) {
   const set = new Set([1, pages]);
-  for (let p = page - radius; p <= page + radius; p++) if (p >= 1 && p <= pages) set.add(p);
+  for (let p = page - radius; p <= page + radius; p++)
+    if (p >= 1 && p <= pages) set.add(p);
   const sorted = [...set].sort((a, b) => a - b);
   const out = [];
   let prev = 0;
   for (const p of sorted) {
-    if (p - prev > 1) out.push('…');
+    if (p - prev > 1) out.push("…");
     out.push(p);
     prev = p;
   }
@@ -634,7 +695,7 @@ function pageWindow(page, pages, radius = 2) {
 }
 
 function pagerHtml(page, pages) {
-  if (pages <= 1) return '';
+  if (pages <= 1) return "";
   const s = store.snapshot();
   const href = (n) => urlFor({ ...s, page: n });
   const num = (n) =>
@@ -650,8 +711,8 @@ function pagerHtml(page, pages) {
       ? `<a class="page next" data-page="${page + 1}" href="${href(page + 1)}">Next ›</a>`
       : `<span class="page next disabled">Next ›</span>`;
   const nums = pageWindow(page, pages)
-    .map((p) => (p === '…' ? `<span class="page gap">…</span>` : num(p)))
-    .join('');
+    .map((p) => (p === "…" ? `<span class="page gap">…</span>` : num(p)))
+    .join("");
   return `<nav class="pager">${prev}${nums}${next}</nav>`;
 }
 
@@ -660,7 +721,8 @@ function buildTree(list) {
   const byId = new Map(list.map((c) => [c.id, { ...c, children: [] }]));
   const roots = [];
   for (const c of byId.values()) {
-    if (c.parent_id != null && byId.has(c.parent_id)) byId.get(c.parent_id).children.push(c);
+    if (c.parent_id != null && byId.has(c.parent_id))
+      byId.get(c.parent_id).children.push(c);
     else roots.push(c);
   }
   const sortRec = (nodes) => {
@@ -676,16 +738,18 @@ function collectionOptions(roots) {
   const out = [];
   const walk = (nodes, depth) => {
     for (const n of nodes) {
-      out.push(`<option value="${n.id}">${'  '.repeat(depth)}${esc(n.name)}</option>`);
+      out.push(
+        `<option value="${n.id}">${"  ".repeat(depth)}${esc(n.name)}</option>`,
+      );
       walk(n.children, depth + 1);
     }
   };
   walk(roots, 0);
-  return out.join('');
+  return out.join("");
 }
 
 async function fetchCollections() {
-  const res = await fetch('/api/collections');
+  const res = await fetch("/api/collections");
   return res.ok ? (await res.json()).collections : [];
 }
 
@@ -693,17 +757,17 @@ async function fetchCollections() {
 class GemmeCollections extends HTMLElement {
   connectedCallback() {
     this.innerHTML = `<h2>Collections</h2><div class="tree"><p class="empty">Loading…</p></div>`;
-    this.treeEl = this.querySelector('.tree');
+    this.treeEl = this.querySelector(".tree");
     this.unsubscribe = store.subscribe(() => this.markSelected());
     this.onData = () => this.scheduleLoad();
-    document.addEventListener('gemme:changed', this.onData);
-    document.addEventListener('gemme:server-change', this.onData);
+    document.addEventListener("gemme:changed", this.onData);
+    document.addEventListener("gemme:server-change", this.onData);
     this.load();
   }
   disconnectedCallback() {
     this.unsubscribe?.();
-    document.removeEventListener('gemme:changed', this.onData);
-    document.removeEventListener('gemme:server-change', this.onData);
+    document.removeEventListener("gemme:changed", this.onData);
+    document.removeEventListener("gemme:server-change", this.onData);
     clearTimeout(this.debounce);
   }
   scheduleLoad() {
@@ -720,29 +784,46 @@ class GemmeCollections extends HTMLElement {
       return;
     }
     const sel = new Set(store.snapshot().filters.collection || []);
-    this.treeEl.innerHTML = `<ul class="ctree">${this.roots.map((n) => node(n, sel)).join('')}</ul>`;
-    this.treeEl.querySelectorAll('input[type=checkbox]').forEach((cb) =>
-      cb.addEventListener('change', () => store.toggleFilter('collection', cb.value, cb.checked))
-    );
-    this.treeEl.querySelectorAll('.ctoggle').forEach((t) =>
-      t.addEventListener('click', () => t.closest('li').classList.toggle('collapsed'))
-    );
+    this.treeEl.innerHTML = `<ul class="ctree">${this.roots.map((n) => node(n, sel)).join("")}</ul>`;
+    this.treeEl
+      .querySelectorAll("input[type=checkbox]")
+      .forEach((cb) =>
+        cb.addEventListener("change", () =>
+          store.toggleFilter("collection", cb.value, cb.checked),
+        ),
+      );
+    this.treeEl
+      .querySelectorAll(".ctoggle")
+      .forEach((t) =>
+        t.addEventListener("click", () =>
+          t.closest("li").classList.toggle("collapsed"),
+        ),
+      );
   }
   markSelected() {
     const sel = new Set(store.snapshot().filters.collection || []);
-    this.treeEl?.querySelectorAll('input[type=checkbox]').forEach((cb) => (cb.checked = sel.has(cb.value)));
+    this.treeEl
+      ?.querySelectorAll("input[type=checkbox]")
+      .forEach((cb) => (cb.checked = sel.has(cb.value)));
   }
 }
 
 // A tree node for the sidebar (checkbox keyed by NAME).
 function node(n, sel) {
   const hasKids = n.children.length > 0;
-  const toggle = hasKids ? `<button class="ctoggle" type="button" aria-label="collapse">▾</button>` : `<span class="cspacer"></span>`;
-  const kids = hasKids ? `<ul>${n.children.map((c) => node(c, sel)).join('')}</ul>` : '';
-  const pub = n.visibility === 'public' ? `<span class="pubdot" title="Public">●</span>` : '';
+  const toggle = hasKids
+    ? `<button class="ctoggle" type="button" aria-label="collapse">▾</button>`
+    : `<span class="cspacer"></span>`;
+  const kids = hasKids
+    ? `<ul>${n.children.map((c) => node(c, sel)).join("")}</ul>`
+    : "";
+  const pub =
+    n.visibility === "public"
+      ? `<span class="pubdot" title="Public">●</span>`
+      : "";
   return `<li>
     <div class="crow">${toggle}
-      <label class="cname"><input type="checkbox" value="${esc(n.name)}" ${sel.has(n.name) ? 'checked' : ''}> <span>${esc(n.name)}</span></label>
+      <label class="cname"><input type="checkbox" value="${esc(n.name)}" ${sel.has(n.name) ? "checked" : ""}> <span>${esc(n.name)}</span></label>
       ${pub}<span class="count">${n.fileCount}</span>
     </div>${kids}</li>`;
 }
@@ -757,7 +838,9 @@ class GemmeFileCollections extends HTMLElement {
   async load() {
     const [collections, memRes] = await Promise.all([
       fetchCollections(),
-      fetch(`/api/files/${this.fileId}/collections`).then((r) => (r.ok ? r.json() : { collectionIds: [] })),
+      fetch(`/api/files/${this.fileId}/collections`).then((r) =>
+        r.ok ? r.json() : { collectionIds: [] },
+      ),
     ]);
     this.member = new Set(memRes.collectionIds);
     this.roots = buildTree(collections);
@@ -769,21 +852,23 @@ class GemmeFileCollections extends HTMLElement {
       return;
     }
     const mnode = (n) =>
-      `<li><label class="cname"><input type="checkbox" data-id="${n.id}" ${this.member.has(n.id) ? 'checked' : ''}> <span>${esc(n.name)}</span></label>${n.children.length ? `<ul>${n.children.map(mnode).join('')}</ul>` : ''}</li>`;
-    this.innerHTML = `<ul class="ctree">${this.roots.map(mnode).join('')}</ul>`;
-    this.querySelectorAll('input[type=checkbox]').forEach((cb) => cb.addEventListener('change', () => this.toggle(cb)));
+      `<li><label class="cname"><input type="checkbox" data-id="${n.id}" ${this.member.has(n.id) ? "checked" : ""}> <span>${esc(n.name)}</span></label>${n.children.length ? `<ul>${n.children.map(mnode).join("")}</ul>` : ""}</li>`;
+    this.innerHTML = `<ul class="ctree">${this.roots.map(mnode).join("")}</ul>`;
+    this.querySelectorAll("input[type=checkbox]").forEach((cb) =>
+      cb.addEventListener("change", () => this.toggle(cb)),
+    );
   }
   async toggle(cb) {
     const id = Number(cb.dataset.id);
     const res = await fetch(`/api/collections/${id}/files`, {
-      method: cb.checked ? 'POST' : 'DELETE',
-      headers: { 'content-type': 'application/json' },
+      method: cb.checked ? "POST" : "DELETE",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ fileIds: [this.fileId] }),
     });
     if (res.ok) {
       if (cb.checked) this.member.add(id);
       else this.member.delete(id);
-      document.dispatchEvent(new CustomEvent('gemme:changed')); // refresh counts elsewhere
+      document.dispatchEvent(new CustomEvent("gemme:changed")); // refresh counts elsewhere
     } else {
       cb.checked = !cb.checked;
     }
@@ -802,29 +887,49 @@ class GemmeCollectionManager extends HTMLElement {
     this.render();
   }
   render() {
-    const rootOpts = `<option value="">(root)</option>` + this.list.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    const rootOpts =
+      `<option value="">(root)</option>` +
+      this.list
+        .map((c) => `<option value="${c.id}">${esc(c.name)}</option>`)
+        .join("");
     this.innerHTML = `
       <form class="cnew">
         <input name="cname" placeholder="New collection name" required>
         <select name="cparent">${rootOpts}</select>
         <button type="submit">Create</button>
       </form>
-      <ul class="ctree manage">${this.roots.map((n) => this.node(n)).join('')}</ul>`;
-    this.querySelector('.cnew').addEventListener('submit', (e) => this.create(e));
-    this.querySelectorAll('button[data-act]').forEach((b) => b.addEventListener('click', () => this.act(b)));
-    this.querySelectorAll('select[data-move]').forEach((s) => s.addEventListener('change', () => this.move(s)));
+      <ul class="ctree manage">${this.roots.map((n) => this.node(n)).join("")}</ul>`;
+    this.querySelector(".cnew").addEventListener("submit", (e) =>
+      this.create(e),
+    );
+    this.querySelectorAll("button[data-act]").forEach((b) =>
+      b.addEventListener("click", () => this.act(b)),
+    );
+    this.querySelectorAll("select[data-move]").forEach((s) =>
+      s.addEventListener("change", () => this.move(s)),
+    );
   }
   node(n) {
     const moveOpts =
       `<option value="">(root)</option>` +
-      this.list.filter((c) => c.id !== n.id).map((c) => `<option value="${c.id}" ${n.parent_id === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
-    const kids = n.children.length ? `<ul>${n.children.map((c) => this.node(c)).join('')}</ul>` : '';
-    const isPublic = n.visibility === 'public';
-    const visBadge = isPublic ? `<span class="badge pub" title="Public — files reachable at /i/:id">public</span>` : '';
+      this.list
+        .filter((c) => c.id !== n.id)
+        .map(
+          (c) =>
+            `<option value="${c.id}" ${n.parent_id === c.id ? "selected" : ""}>${esc(c.name)}</option>`,
+        )
+        .join("");
+    const kids = n.children.length
+      ? `<ul>${n.children.map((c) => this.node(c)).join("")}</ul>`
+      : "";
+    const isPublic = n.visibility === "public";
+    const visBadge = isPublic
+      ? `<span class="badge pub" title="Public — files reachable at /i/:id">public</span>`
+      : "";
     return `<li><div class="crow manage">
       <span class="cname">${esc(n.name)}</span>${visBadge}<span class="count">${n.fileCount}</span>
       <select data-move="${n.id}" title="Move to parent">${moveOpts}</select>
-      <button type="button" data-act="visibility" data-id="${n.id}" data-vis="${n.visibility}">${isPublic ? 'Make private' : 'Make public'}</button>
+      <button type="button" data-act="visibility" data-id="${n.id}" data-vis="${n.visibility}">${isPublic ? "Make private" : "Make public"}</button>
       <button type="button" data-act="rename" data-id="${n.id}">Rename</button>
       <button type="button" data-act="delete" data-id="${n.id}">Delete</button>
     </div>${kids}</li>`;
@@ -833,29 +938,46 @@ class GemmeCollectionManager extends HTMLElement {
     e.preventDefault();
     const name = e.target.cname.value.trim();
     if (!name) return;
-    const parentId = e.target.cparent.value ? Number(e.target.cparent.value) : null;
-    await fetch('/api/collections', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, parentId }) });
+    const parentId = e.target.cparent.value
+      ? Number(e.target.cparent.value)
+      : null;
+    await fetch("/api/collections", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, parentId }),
+    });
     await this.load();
   }
   async act(b) {
     const id = Number(b.dataset.id);
-    if (b.dataset.act === 'rename') {
-      const name = prompt('New name:');
+    if (b.dataset.act === "rename") {
+      const name = prompt("New name:");
       if (name && name.trim())
-        await fetch(`/api/collections/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: name.trim() }) });
-    } else if (b.dataset.act === 'delete') {
-      if (!confirm('Delete this collection and all its sub-collections? Files are not deleted.')) return;
-      await fetch(`/api/collections/${id}`, { method: 'DELETE' });
-    } else if (b.dataset.act === 'visibility') {
-      const next = b.dataset.vis === 'public' ? 'private' : 'public';
+        await fetch(`/api/collections/${id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: name.trim() }),
+        });
+    } else if (b.dataset.act === "delete") {
       if (
-        next === 'public' &&
-        !confirm('Make this collection public? Every file in it (and its sub-collections) becomes reachable at /i/:id without logging in.')
+        !confirm(
+          "Delete this collection and all its sub-collections? Files are not deleted.",
+        )
+      )
+        return;
+      await fetch(`/api/collections/${id}`, { method: "DELETE" });
+    } else if (b.dataset.act === "visibility") {
+      const next = b.dataset.vis === "public" ? "private" : "public";
+      if (
+        next === "public" &&
+        !confirm(
+          "Make this collection public? Every file in it (and its sub-collections) becomes reachable at /i/:id without logging in.",
+        )
       )
         return;
       await fetch(`/api/collections/${id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ visibility: next }),
       });
     }
@@ -864,8 +986,13 @@ class GemmeCollectionManager extends HTMLElement {
   async move(s) {
     const id = Number(s.dataset.move);
     const parentId = s.value ? Number(s.value) : null;
-    const res = await fetch(`/api/collections/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ parentId }) });
-    if (!res.ok) alert((await res.json().catch(() => ({}))).error || 'Move failed');
+    const res = await fetch(`/api/collections/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ parentId }),
+    });
+    if (!res.ok)
+      alert((await res.json().catch(() => ({}))).error || "Move failed");
     await this.load();
   }
 }
@@ -891,21 +1018,30 @@ class GemmeUploader extends HTMLElement {
         <p class="assign-hint sub"></p>
         <div class="assign-tree"><p class="empty">Loading…</p></div>
       </section>`;
-    this.zone = this.querySelector('.dropzone');
-    this.fileInput = this.querySelector('input[type=file]');
-    this.list = this.querySelector('.upload-list');
-    this.assign = this.querySelector('.assign');
-    this.assignHint = this.querySelector('.assign-hint');
-    this.assignTree = this.querySelector('.assign-tree');
+    this.zone = this.querySelector(".dropzone");
+    this.fileInput = this.querySelector("input[type=file]");
+    this.list = this.querySelector(".upload-list");
+    this.assign = this.querySelector(".assign");
+    this.assignHint = this.querySelector(".assign-hint");
+    this.assignTree = this.querySelector(".assign-tree");
 
-    this.querySelector('.pick').addEventListener('click', () => this.fileInput.click());
-    this.fileInput.addEventListener('change', () => this.add(this.fileInput.files));
-
-    ['dragover', 'dragenter'].forEach((e) =>
-      this.zone.addEventListener(e, (ev) => { ev.preventDefault(); this.zone.classList.add('over'); })
+    this.querySelector(".pick").addEventListener("click", () =>
+      this.fileInput.click(),
     );
-    ['dragleave', 'drop'].forEach((e) => this.zone.addEventListener(e, () => this.zone.classList.remove('over')));
-    this.zone.addEventListener('drop', (ev) => {
+    this.fileInput.addEventListener("change", () =>
+      this.add(this.fileInput.files),
+    );
+
+    ["dragover", "dragenter"].forEach((e) =>
+      this.zone.addEventListener(e, (ev) => {
+        ev.preventDefault();
+        this.zone.classList.add("over");
+      }),
+    );
+    ["dragleave", "drop"].forEach((e) =>
+      this.zone.addEventListener(e, () => this.zone.classList.remove("over")),
+    );
+    this.zone.addEventListener("drop", (ev) => {
       ev.preventDefault();
       if (ev.dataTransfer?.files?.length) this.add(ev.dataTransfer.files);
     });
@@ -924,18 +1060,21 @@ class GemmeUploader extends HTMLElement {
       return;
     }
     const cnode = (n) =>
-      `<li><label class="cname"><input type="checkbox" data-id="${n.id}" ${this.selected.has(n.id) ? 'checked' : ''}> <span>${esc(n.name)}</span></label>${n.children.length ? `<ul>${n.children.map(cnode).join('')}</ul>` : ''}</li>`;
-    this.assignTree.innerHTML = `<ul class="ctree">${this.roots.map(cnode).join('')}</ul>`;
-    this.assignTree.querySelectorAll('input[type=checkbox]').forEach((cb) =>
-      cb.addEventListener('change', () => this.toggleCollection(cb))
-    );
+      `<li><label class="cname"><input type="checkbox" data-id="${n.id}" ${this.selected.has(n.id) ? "checked" : ""}> <span>${esc(n.name)}</span></label>${n.children.length ? `<ul>${n.children.map(cnode).join("")}</ul>` : ""}</li>`;
+    this.assignTree.innerHTML = `<ul class="ctree">${this.roots.map(cnode).join("")}</ul>`;
+    this.assignTree
+      .querySelectorAll("input[type=checkbox]")
+      .forEach((cb) =>
+        cb.addEventListener("change", () => this.toggleCollection(cb)),
+      );
   }
 
   // Show/hide the collection tree and update its hint for the current batch.
   syncAssign() {
     const n = this.batch.length;
     this.assign.hidden = n === 0;
-    if (n > 0) this.assignHint.textContent = `Add ${n} uploaded file${n === 1 ? '' : 's'} to collections:`;
+    if (n > 0)
+      this.assignHint.textContent = `Add ${n} uploaded file${n === 1 ? "" : "s"} to collections:`;
   }
 
   async add(fileList) {
@@ -943,7 +1082,7 @@ class GemmeUploader extends HTMLElement {
     // Fresh round: clear the previous batch, selection, and file list.
     this.batch = [];
     this.selected = new Set();
-    this.list.innerHTML = '';
+    this.list.innerHTML = "";
     this.renderTree();
     this.syncAssign();
 
@@ -951,18 +1090,21 @@ class GemmeUploader extends HTMLElement {
     let anyCreated = false;
     await Promise.all(
       files.map(async (file) => {
-        const row = document.createElement('li');
+        const row = document.createElement("li");
         row.textContent = `${file.name} — uploading…`;
         this.list.appendChild(row);
         try {
-          const result = await uploadFile(file, (pct) => (row.textContent = `${file.name} — ${pct}%`));
+          const result = await uploadFile(
+            file,
+            (pct) => (row.textContent = `${file.name} — ${pct}%`),
+          );
           if (this.round !== round) return; // superseded by a newer round
           if (result.skipped) {
             row.textContent = `${file.name} — skipped (already imported)`;
-            row.className = 'skip';
+            row.className = "skip";
           } else {
             row.textContent = `${file.name} — done`;
-            row.className = 'ok';
+            row.className = "ok";
             anyCreated = true;
           }
           // Include both created and skipped files so a dropped duplicate can
@@ -972,17 +1114,18 @@ class GemmeUploader extends HTMLElement {
             this.batch.push(id);
             this.syncAssign();
             // If a collection was already ticked mid-upload, file this one too.
-            for (const cid of this.selected) this.setMembership(cid, [id], true);
+            for (const cid of this.selected)
+              this.setMembership(cid, [id], true);
           }
         } catch (err) {
           if (this.round !== round) return;
           row.textContent = `${file.name} — failed: ${err.message}`;
-          row.className = 'fail';
+          row.className = "fail";
         }
-      })
+      }),
     );
     if (this.round !== round) return;
-    if (anyCreated) document.dispatchEvent(new CustomEvent('gemme:changed'));
+    if (anyCreated) document.dispatchEvent(new CustomEvent("gemme:changed"));
     this.syncAssign();
   }
 
@@ -993,21 +1136,22 @@ class GemmeUploader extends HTMLElement {
     if (on) this.selected.add(cid);
     else this.selected.delete(cid);
     const fileIds = [...this.batch];
-    const ok = fileIds.length === 0 || (await this.setMembership(cid, fileIds, on));
+    const ok =
+      fileIds.length === 0 || (await this.setMembership(cid, fileIds, on));
     if (!ok) {
       cb.checked = !on; // revert on failure
       if (on) this.selected.delete(cid);
       else this.selected.add(cid);
     } else {
-      document.dispatchEvent(new CustomEvent('gemme:changed')); // refresh counts elsewhere
+      document.dispatchEvent(new CustomEvent("gemme:changed")); // refresh counts elsewhere
     }
   }
 
   // Add or remove many files to/from one collection via the bulk endpoint.
   async setMembership(collectionId, fileIds, add) {
     const res = await fetch(`/api/collections/${collectionId}/files`, {
-      method: add ? 'POST' : 'DELETE',
-      headers: { 'content-type': 'application/json' },
+      method: add ? "POST" : "DELETE",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ fileIds }),
     });
     return res.ok;
@@ -1017,17 +1161,23 @@ class GemmeUploader extends HTMLElement {
 function uploadFile(file, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/files');
-    xhr.setRequestHeader('X-Filename', encodeURIComponent(file.name));
-    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.open("POST", "/api/files");
+    xhr.setRequestHeader("X-Filename", encodeURIComponent(file.name));
+    xhr.setRequestHeader(
+      "Content-Type",
+      file.type || "application/octet-stream",
+    );
     xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+      if (e.lengthComputable && onProgress)
+        onProgress(Math.round((e.loaded / e.total) * 100));
     };
     xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText || '{}'));
-      else reject(new Error(safeError(xhr.responseText) || `HTTP ${xhr.status}`));
+      if (xhr.status >= 200 && xhr.status < 300)
+        resolve(JSON.parse(xhr.responseText || "{}"));
+      else
+        reject(new Error(safeError(xhr.responseText) || `HTTP ${xhr.status}`));
     };
-    xhr.onerror = () => reject(new Error('network error'));
+    xhr.onerror = () => reject(new Error("network error"));
     xhr.send(file);
   });
 }
@@ -1046,9 +1196,11 @@ function connectServerEvents() {
   if (serverEventsStarted) return;
   serverEventsStarted = true;
   try {
-    const source = new EventSource('/api/events');
-    source.addEventListener('change', (e) => {
-      document.dispatchEvent(new CustomEvent('gemme:server-change', { detail: safeJson(e.data) }));
+    const source = new EventSource("/api/events");
+    source.addEventListener("change", (e) => {
+      document.dispatchEvent(
+        new CustomEvent("gemme:server-change", { detail: safeJson(e.data) }),
+      );
     });
   } catch {
     serverEventsStarted = false;
@@ -1066,43 +1218,43 @@ function safeJson(s) {
 // ---- page glue ------------------------------------------------------------
 
 function wireLogin() {
-  const form = document.getElementById('login-form');
+  const form = document.getElementById("login-form");
   if (!form) return;
-  form.addEventListener('submit', async (e) => {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const body = { email: form.email.value, password: form.password.value };
-    const res = await fetch('/api/login', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (res.ok) location.href = '/';
+    if (res.ok) location.href = "/";
     else
-      document.getElementById('login-error').textContent =
-        (await res.json().catch(() => ({}))).error || 'Sign in failed';
+      document.getElementById("login-error").textContent =
+        (await res.json().catch(() => ({}))).error || "Sign in failed";
   });
 }
 
 function wireLogout() {
-  const btn = document.getElementById('logout');
+  const btn = document.getElementById("logout");
   if (!btn) return;
-  btn.addEventListener('click', async () => {
-    await fetch('/api/logout', { method: 'POST' });
-    location.href = '/login';
+  btn.addEventListener("click", async () => {
+    await fetch("/api/logout", { method: "POST" });
+    location.href = "/login";
   });
 }
 
 // Initialize the store from the URL before components upgrade and read it.
 store.init(resolveUrlState());
 
-customElements.define('gemme-files', GemmeFiles);
-customElements.define('gemme-search', GemmeSearch);
-customElements.define('gemme-filters', GemmeFilters);
-customElements.define('gemme-collections', GemmeCollections);
-customElements.define('gemme-file-collections', GemmeFileCollections);
-customElements.define('gemme-collection-manager', GemmeCollectionManager);
-customElements.define('gemme-controls', GemmeControls);
-customElements.define('gemme-pager', GemmePager);
-customElements.define('gemme-uploader', GemmeUploader);
+customElements.define("gemme-files", GemmeFiles);
+customElements.define("gemme-search", GemmeSearch);
+customElements.define("gemme-filters", GemmeFilters);
+customElements.define("gemme-collections", GemmeCollections);
+customElements.define("gemme-file-collections", GemmeFileCollections);
+customElements.define("gemme-collection-manager", GemmeCollectionManager);
+customElements.define("gemme-controls", GemmeControls);
+customElements.define("gemme-pager", GemmePager);
+customElements.define("gemme-uploader", GemmeUploader);
 wireLogin();
 wireLogout();

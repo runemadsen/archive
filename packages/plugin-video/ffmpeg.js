@@ -1,13 +1,14 @@
-import { spawn } from 'node:child_process';
-import { createRequire } from 'node:module';
-import { SEGMENT_SECONDS, AUDIO_BITRATE } from './constants.js';
+import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
+
+import { SEGMENT_SECONDS, AUDIO_BITRATE } from "./constants.js";
 
 // Resolve the bundled static binaries. Kept behind the plugin boundary so the
 // server core never depends on ffmpeg. `createRequire` lets us read the CJS
 // packages' resolved paths from this ESM module.
 const require = createRequire(import.meta.url);
-const FFMPEG = require('ffmpeg-static'); // string path (or null if unavailable)
-const FFPROBE = require('ffprobe-static').path;
+const FFMPEG = require("ffmpeg-static"); // string path (or null if unavailable)
+const FFPROBE = require("ffprobe-static").path;
 
 /** True when both binaries resolved — lets callers/tests degrade gracefully. */
 export function ffmpegAvailable() {
@@ -23,16 +24,23 @@ export const ffprobePath = FFPROBE;
  */
 function run(bin, args, { capture = false } = {}) {
   return new Promise((resolve, reject) => {
-    if (!bin) return reject(new Error('binary not available'));
-    const child = spawn(bin, args, { stdio: ['ignore', capture ? 'pipe' : 'ignore', 'pipe'] });
+    if (!bin) return reject(new Error("binary not available"));
+    const child = spawn(bin, args, {
+      stdio: ["ignore", capture ? "pipe" : "ignore", "pipe"],
+    });
     const out = [];
-    let err = '';
-    if (capture) child.stdout.on('data', (c) => out.push(c));
-    child.stderr.on('data', (c) => (err += c.toString()));
-    child.on('error', reject);
-    child.on('close', (code) => {
+    let err = "";
+    if (capture) child.stdout.on("data", (c) => out.push(c));
+    child.stderr.on("data", (c) => (err += c.toString()));
+    child.on("error", reject);
+    child.on("close", (code) => {
       if (code === 0) resolve(capture ? Buffer.concat(out) : null);
-      else reject(new Error(`${bin.split('/').pop()} exited ${code}: ${err.slice(-500)}`));
+      else
+        reject(
+          new Error(
+            `${bin.split("/").pop()} exited ${code}: ${err.slice(-500)}`,
+          ),
+        );
     });
   });
 }
@@ -41,13 +49,21 @@ function run(bin, args, { capture = false } = {}) {
 export async function probe(input) {
   const json = await run(
     FFPROBE,
-    ['-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', input],
-    { capture: true }
+    [
+      "-v",
+      "quiet",
+      "-print_format",
+      "json",
+      "-show_format",
+      "-show_streams",
+      input,
+    ],
+    { capture: true },
   );
-  const data = JSON.parse(json.toString('utf8'));
+  const data = JSON.parse(json.toString("utf8"));
   const streams = data.streams || [];
-  const v = streams.find((s) => s.codec_type === 'video');
-  const a = streams.find((s) => s.codec_type === 'audio');
+  const v = streams.find((s) => s.codec_type === "video");
+  const a = streams.find((s) => s.codec_type === "audio");
   const duration = Number(data.format?.duration);
   const bitrate = Number(data.format?.bit_rate);
   return {
@@ -64,8 +80,8 @@ export async function probe(input) {
 }
 
 function parseFps(rate) {
-  if (!rate || rate === '0/0') return undefined;
-  const [n, d] = rate.split('/').map(Number);
+  if (!rate || rate === "0/0") return undefined;
+  const [n, d] = rate.split("/").map(Number);
   if (!d) return undefined;
   const fps = n / d;
   return Number.isFinite(fps) ? Math.round(fps * 100) / 100 : undefined;
@@ -90,43 +106,77 @@ export function selectLadder(sourceHeight, ladder) {
  * relative URLs so the bundle serves under any mount. Pure — unit-tested.
  */
 export function buildHlsArgs(input, outDir, rungs, hasAudio) {
-  const splits = rungs.map((_, i) => `[v${i}]`).join('');
+  const splits = rungs.map((_, i) => `[v${i}]`).join("");
   const scale = rungs
     .map((r, i) => `[v${i}]scale=w=-2:h=${r.height}[v${i}out]`)
-    .join('; ');
+    .join("; ");
   const filter = `[0:v]split=${rungs.length}${splits}; ${scale}`;
 
-  const args = ['-y', '-i', input, '-filter_complex', filter];
+  const args = ["-y", "-i", input, "-filter_complex", filter];
 
   rungs.forEach((r, i) => {
     args.push(
-      '-map', `[v${i}out]`,
-      `-c:v:${i}`, 'libx264', '-preset', 'veryfast', '-crf', '21',
+      "-map",
+      `[v${i}out]`,
+      `-c:v:${i}`,
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "21",
       // Aligned GOPs (~2s) so segments line up across renditions for clean ABR switching.
-      '-g', '48', '-keyint_min', '48', '-sc_threshold', '0',
-      `-b:v:${i}`, r.videoBitrate, `-maxrate:v:${i}`, r.maxrate, `-bufsize:v:${i}`, r.bufsize
+      "-g",
+      "48",
+      "-keyint_min",
+      "48",
+      "-sc_threshold",
+      "0",
+      `-b:v:${i}`,
+      r.videoBitrate,
+      `-maxrate:v:${i}`,
+      r.maxrate,
+      `-bufsize:v:${i}`,
+      r.bufsize,
     );
   });
   if (hasAudio) {
     rungs.forEach((_, i) => {
-      args.push('-map', 'a:0', `-c:a:${i}`, 'aac', `-b:a:${i}`, AUDIO_BITRATE, '-ac', '2');
+      args.push(
+        "-map",
+        "a:0",
+        `-c:a:${i}`,
+        "aac",
+        `-b:a:${i}`,
+        AUDIO_BITRATE,
+        "-ac",
+        "2",
+      );
     });
   }
 
   // `name:` makes ffmpeg's `%v` expand to a readable variant dir (e.g. `720p/`)
   // instead of a bare index, so member URLs read `hls/720p/seg_000.ts`.
   const varMap = rungs
-    .map((r, i) => (hasAudio ? `v:${i},a:${i},name:${r.name}` : `v:${i},name:${r.name}`))
-    .join(' ');
+    .map((r, i) =>
+      hasAudio ? `v:${i},a:${i},name:${r.name}` : `v:${i},name:${r.name}`,
+    )
+    .join(" ");
   args.push(
-    '-f', 'hls',
-    '-hls_time', String(SEGMENT_SECONDS),
-    '-hls_playlist_type', 'vod',
-    '-hls_flags', 'independent_segments',
-    '-hls_segment_filename', `${outDir}/%v/seg_%03d.ts`,
-    '-master_pl_name', 'master.m3u8',
-    '-var_stream_map', varMap,
-    `${outDir}/%v/index.m3u8`
+    "-f",
+    "hls",
+    "-hls_time",
+    String(SEGMENT_SECONDS),
+    "-hls_playlist_type",
+    "vod",
+    "-hls_flags",
+    "independent_segments",
+    "-hls_segment_filename",
+    `${outDir}/%v/seg_%03d.ts`,
+    "-master_pl_name",
+    "master.m3u8",
+    "-var_stream_map",
+    varMap,
+    `${outDir}/%v/index.m3u8`,
   );
   return args;
 }
@@ -141,15 +191,21 @@ export async function extractFrame(input, { width = 512, atSeconds = 1 } = {}) {
   return run(
     FFMPEG,
     [
-      '-y',
-      '-ss', String(atSeconds),
-      '-i', input,
-      '-frames:v', '1',
-      '-vf', `scale=w=${width}:h=-2`,
-      '-c:v', 'libwebp',
-      '-f', 'image2pipe',
-      'pipe:1',
+      "-y",
+      "-ss",
+      String(atSeconds),
+      "-i",
+      input,
+      "-frames:v",
+      "1",
+      "-vf",
+      `scale=w=${width}:h=-2`,
+      "-c:v",
+      "libwebp",
+      "-f",
+      "image2pipe",
+      "pipe:1",
     ],
-    { capture: true }
+    { capture: true },
   );
 }

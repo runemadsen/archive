@@ -1,19 +1,24 @@
-import http from 'node:http';
-import { Router } from './router.js';
-import { sendJson, sendText, HttpError } from './respond.js';
-import { parseCookies, getSessionUser, SESSION_COOKIE } from '../lib/auth/sessions.js';
-import { registerAuthRoutes } from './routes/auth.js';
-import { registerFileRoutes } from './routes/files.js';
-import { registerSearchRoutes } from './routes/search.js';
-import { registerPageRoutes } from './routes/pages.js';
-import { registerEventRoutes } from './routes/events.js';
-import { registerFacetRoutes } from './routes/facets.js';
-import { registerCollectionRoutes } from './routes/collections.js';
-import { registerPublicRoutes } from './routes/public.js';
-import { registerServingRoutes } from './routes/serving.js';
-import { BlobStore } from '../lib/storage/blobs.js';
-import { DerivedStore } from '../lib/storage/derived.js';
-import { createEventBus } from '../lib/bus.js';
+import http from "node:http";
+
+import {
+  parseCookies,
+  getSessionUser,
+  SESSION_COOKIE,
+} from "../lib/auth/sessions.js";
+import { createEventBus } from "../lib/bus.js";
+import { BlobStore } from "../lib/storage/blobs.js";
+import { DerivedStore } from "../lib/storage/derived.js";
+import { sendJson, sendText, HttpError } from "./respond.js";
+import { Router } from "./router.js";
+import { registerAuthRoutes } from "./routes/auth.js";
+import { registerCollectionRoutes } from "./routes/collections.js";
+import { registerEventRoutes } from "./routes/events.js";
+import { registerFacetRoutes } from "./routes/facets.js";
+import { registerFileRoutes } from "./routes/files.js";
+import { registerPageRoutes } from "./routes/pages.js";
+import { registerPublicRoutes } from "./routes/public.js";
+import { registerSearchRoutes } from "./routes/search.js";
+import { registerServingRoutes } from "./routes/serving.js";
 
 /**
  * Build the router with all API routes registered. Exposed separately so tests
@@ -21,7 +26,7 @@ import { createEventBus } from '../lib/bus.js';
  */
 export function buildRouter() {
   const router = new Router();
-  router.get('/health', (req, res) => sendJson(res, 200, { status: 'ok' }));
+  router.get("/health", (req, res) => sendJson(res, 200, { status: "ok" }));
   registerAuthRoutes(router);
   registerFileRoutes(router);
   registerSearchRoutes(router);
@@ -45,18 +50,27 @@ export function buildRouter() {
  * @param {string} opts.dataDir
  * @param {boolean} [opts.secure] - set Secure on cookies (behind HTTPS)
  */
-export function createApp({ db, dataDir, secure = false, dev = false, registry, onFileCreated, events = createEventBus() }) {
+export function createApp({
+  db,
+  dataDir,
+  secure = false,
+  dev = false,
+  registry,
+  onFileCreated,
+  events = createEventBus(),
+}) {
   const router = buildRouter();
   const blobStore = new BlobStore(dataDir);
   const derivedStore = new DerivedStore(dataDir);
 
   return http.createServer(async (req, res) => {
     try {
-      const url = new URL(req.url, 'http://localhost');
+      const url = new URL(req.url, "http://localhost");
       const match = router.match(req.method, url.pathname);
 
-      if (!match) return sendJson(res, 404, { error: 'Not found' });
-      if (match.methodNotAllowed) return sendJson(res, 405, { error: 'Method not allowed' });
+      if (!match) return sendJson(res, 404, { error: "Not found" });
+      if (match.methodNotAllowed)
+        return sendJson(res, 405, { error: "Method not allowed" });
 
       // Resolve the session user (if any) for this request.
       const cookies = parseCookies(req.headers.cookie);
@@ -86,8 +100,25 @@ export function createApp({ db, dataDir, secure = false, dev = false, registry, 
 }
 
 /** Create the server and start listening. */
-export function startServer({ db, port, dataDir, secure = false, dev = false, registry, onFileCreated, events }) {
-  const server = createApp({ db, dataDir, secure, dev, registry, onFileCreated, events });
+export function startServer({
+  db,
+  port,
+  dataDir,
+  secure = false,
+  dev = false,
+  registry,
+  onFileCreated,
+  events,
+}) {
+  const server = createApp({
+    db,
+    dataDir,
+    secure,
+    dev,
+    registry,
+    onFileCreated,
+    events,
+  });
   return new Promise((resolve) => {
     server.listen(port, () => {
       const addr = server.address();
@@ -104,5 +135,5 @@ function handleError(res, err) {
     return sendJson(res, err.status, { error: err.message });
   }
   console.error(err);
-  return sendText(res, 500, 'Internal Server Error');
+  return sendText(res, 500, "Internal Server Error");
 }

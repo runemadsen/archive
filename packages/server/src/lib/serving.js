@@ -1,7 +1,8 @@
-import crypto from 'node:crypto';
-import { Readable } from 'node:stream';
-import fsp from 'node:fs/promises';
-import { extForType } from './storage/derived.js';
+import crypto from "node:crypto";
+import fsp from "node:fs/promises";
+import { Readable } from "node:stream";
+
+import { extForType } from "./storage/derived.js";
 
 /**
  * Unified serving engine. The core is format-agnostic: a plugin declares which
@@ -27,13 +28,18 @@ export function makeSource(ctx, { contentHash, mimeType, filename }) {
     contentPath: ctx.blobStore.pathForHash(contentHash),
     mimeType,
     filename,
-    loadBuffer: async () => (cached ??= await ctx.blobStore.readBuffer(contentHash)),
+    loadBuffer: async () =>
+      (cached ??= await ctx.blobStore.readBuffer(contentHash)),
   };
 }
 
 /** Short, stable cache signature for a canonical key + output extension. */
 export function specSig(key, ext) {
-  return crypto.createHash('sha256').update(`${JSON.stringify(key)}|${ext}`).digest('hex').slice(0, 16);
+  return crypto
+    .createHash("sha256")
+    .update(`${JSON.stringify(key)}|${ext}`)
+    .digest("hex")
+    .slice(0, 16);
 }
 
 /** First matching plugin that serves `ext` via its `serving` capability, or null. */
@@ -46,7 +52,7 @@ export function servingFor(registry, mimeType, filename, ext) {
 
 /** Per-file bundle cache signature (namespaced by plugin id + serving.version). */
 function bundleSig(plugin) {
-  return specSig({ p: plugin.id, v: plugin.serving?.version ?? 1 }, 'bundle');
+  return specSig({ p: plugin.id, v: plugin.serving?.version ?? 1 }, "bundle");
 }
 
 /**
@@ -82,31 +88,51 @@ export function makeServingApi(ctx, rawSource, plugin) {
         size: stat.size,
         contentType,
         etag: `"${source.contentHash}-${sig}"`,
-        open: (range) => derivedStore.createVariantReadStream(source.contentHash, sig, ext, range),
+        open: (range) =>
+          derivedStore.createVariantReadStream(
+            source.contentHash,
+            sig,
+            ext,
+            range,
+          ),
       };
     },
 
     /** A member of this file's pre-generated bundle; null if absent (→ 404). */
     member(memberPath, contentType) {
       const sig = bundleSig(plugin);
-      if (!derivedStore.hasMember(source.contentHash, sig, memberPath)) return null;
+      if (!derivedStore.hasMember(source.contentHash, sig, memberPath))
+        return null;
       const stat = derivedStore.statMember(source.contentHash, sig, memberPath);
       return {
         size: stat.size,
         contentType,
         etag: `"${source.contentHash}-${sig}-${memberPath}"`,
-        open: (range) => derivedStore.createMemberReadStream(source.contentHash, sig, memberPath, range),
+        open: (range) =>
+          derivedStore.createMemberReadStream(
+            source.contentHash,
+            sig,
+            memberPath,
+            range,
+          ),
       };
     },
 
     /** Inline bytes (small/dynamic responses). Range-safe (slices the buffer). */
     bytes(buffer, contentType) {
-      const sig = crypto.createHash('sha256').update(buffer).digest('hex').slice(0, 16);
+      const sig = crypto
+        .createHash("sha256")
+        .update(buffer)
+        .digest("hex")
+        .slice(0, 16);
       return {
         size: buffer.length,
         contentType,
         etag: `"${source.contentHash}-${sig}"`,
-        open: (range) => Readable.from(range ? buffer.subarray(range.start, range.end + 1) : buffer),
+        open: (range) =>
+          Readable.from(
+            range ? buffer.subarray(range.start, range.end + 1) : buffer,
+          ),
       };
     },
 
@@ -132,11 +158,11 @@ export function makeServingApi(ctx, rawSource, plugin) {
 
 // A file has at most one thumbnail; store it under a fixed sig so serving can
 // locate it from `thumbnail_type` alone.
-const THUMB_SIG = 'thumb';
+const THUMB_SIG = "thumb";
 
 /** First matching plugin that exposes a `thumbnail` capability, or null. */
 export function thumbnailFor(registry, mimeType, filename) {
-  return registry?.capability?.(mimeType, filename, 'thumbnail') ?? null;
+  return registry?.capability?.(mimeType, filename, "thumbnail") ?? null;
 }
 
 /**

@@ -1,9 +1,9 @@
-import { HttpError } from '../respond.js';
-import { requireAuth } from '../middleware.js';
-import { getFile } from '../../lib/files.js';
-import { servingFor, makeServingApi } from '../../lib/serving.js';
-import { streamBytes, imageCacheControl } from '../render-response.js';
-import { resolvePublic } from './public.js';
+import { getFile } from "../../lib/files.js";
+import { servingFor, makeServingApi } from "../../lib/serving.js";
+import { requireAuth } from "../middleware.js";
+import { streamBytes, imageCacheControl } from "../render-response.js";
+import { HttpError } from "../respond.js";
+import { resolvePublic } from "./public.js";
 
 /**
  * Generic plugin serving — the one place derived renditions/streams are served,
@@ -22,16 +22,16 @@ import { resolvePublic } from './public.js';
  */
 export function registerServingRoutes(router) {
   router.get(
-    '/api/files/:id/*rest',
+    "/api/files/:id/*rest",
     requireAuth(async (req, res, ctx) => {
       const id = Number(ctx.params.id);
       const file = Number.isInteger(id) && id > 0 ? getFile(ctx.db, id) : null;
-      if (!file) throw new HttpError(404, 'Not found');
+      if (!file) throw new HttpError(404, "Not found");
       await dispatchServe(req, res, ctx, file, ctx.params.rest);
-    })
+    }),
   );
 
-  router.get('/i/:id/*rest', async (req, res, ctx) => {
+  router.get("/i/:id/*rest", async (req, res, ctx) => {
     const file = resolvePublic(ctx); // 404s for non-public/missing
     await dispatchServe(req, res, ctx, file, ctx.params.rest);
   });
@@ -44,29 +44,44 @@ export function registerServingRoutes(router) {
  * segment, so one callback can serve a manifest and its segments.
  */
 async function dispatchServe(req, res, ctx, file, rest) {
-  const segments = String(rest).split('/').filter(Boolean);
-  const last = segments[segments.length - 1] || '';
-  const dot = last.lastIndexOf('.');
-  if (dot === -1) throw new HttpError(404, 'Not found');
+  const segments = String(rest).split("/").filter(Boolean);
+  const last = segments[segments.length - 1] || "";
+  const dot = last.lastIndexOf(".");
+  if (dot === -1) throw new HttpError(404, "Not found");
   const ext = last.slice(dot + 1).toLowerCase();
 
-  const plugin = servingFor(ctx.registry, file.mime_type, file.original_filename, ext);
-  if (!plugin) throw new HttpError(404, 'Not found');
+  const plugin = servingFor(
+    ctx.registry,
+    file.mime_type,
+    file.original_filename,
+    ext,
+  );
+  if (!plugin) throw new HttpError(404, "Not found");
 
   const api = makeServingApi(
     ctx,
-    { contentHash: file.content_hash, mimeType: file.mime_type, filename: file.original_filename },
-    plugin
+    {
+      contentHash: file.content_hash,
+      mimeType: file.mime_type,
+      filename: file.original_filename,
+    },
+    plugin,
   );
 
   let descriptor;
   try {
-    descriptor = await plugin.serving.serve({ source: api.source, segments, ext }, api);
+    descriptor = await plugin.serving.serve(
+      { source: api.source, segments, ext },
+      api,
+    );
   } catch (err) {
     if (err instanceof HttpError) throw err;
     throw new HttpError(400, err.message); // bad params (e.g. invalid transform)
   }
-  if (!descriptor) throw new HttpError(404, 'Not found');
+  if (!descriptor) throw new HttpError(404, "Not found");
 
-  streamBytes(req, res, { ...descriptor, cacheControl: imageCacheControl(ctx) });
+  streamBytes(req, res, {
+    ...descriptor,
+    cacheControl: imageCacheControl(ctx),
+  });
 }

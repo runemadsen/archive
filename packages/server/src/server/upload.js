@@ -1,4 +1,4 @@
-import { HttpError } from './respond.js';
+import { HttpError } from "./respond.js";
 
 /**
  * Receive a single uploaded file as a raw request body and stream it into the
@@ -14,20 +14,22 @@ import { HttpError } from './respond.js';
  * @returns {Promise<{filename:string, mimeType:string, hash:string, size:number, deduped:boolean}>}
  */
 export async function receiveUpload(req, blobStore) {
-  const rawName = req.headers['x-filename'];
-  if (!rawName) throw new HttpError(400, 'Missing X-Filename header');
+  const rawName = req.headers["x-filename"];
+  if (!rawName) throw new HttpError(400, "Missing X-Filename header");
   let filename;
   try {
     filename = decodeURIComponent(rawName).trim();
   } catch {
-    throw new HttpError(400, 'Invalid X-Filename header');
+    throw new HttpError(400, "Invalid X-Filename header");
   }
-  if (!filename) throw new HttpError(400, 'Empty filename');
+  if (!filename) throw new HttpError(400, "Empty filename");
 
-  const mimeType = (req.headers['content-type'] || 'application/octet-stream').split(';')[0].trim();
+  const mimeType = (req.headers["content-type"] || "application/octet-stream")
+    .split(";")[0]
+    .trim();
 
   const { hash, size, deduped } = await blobStore.putStream(req);
-  if (size === 0) throw new HttpError(400, 'Empty upload');
+  if (size === 0) throw new HttpError(400, "Empty upload");
 
   return { filename, mimeType, hash, size, deduped };
 }
